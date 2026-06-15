@@ -2,9 +2,6 @@
 
 A high-performance, native GUI wrapper for media download engines — built in Rust with [Iced](https://github.com/iced-rs/iced).
 
-<img width="2424" height="1724" alt="image" src="https://github.com/user-attachments/assets/c761cea6-8ae0-470a-943d-c2963a437765" />
-
-
 ## Features
 
 - **Simple & advanced download modes** — paste a URL and go, or tune every download option.
