@@ -1,0 +1,6 @@
+/target
+C:\ProgramData\clipkit-build
+*.exe
+*.pdb
+.DS_Store
+Thumbs.db

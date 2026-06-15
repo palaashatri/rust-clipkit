@@ -1,0 +1,21 @@
+[package]
+name = "gui"
+version = "1.0.0"
+edition = "2021"
+
+[[bin]]
+name = "clipkit"
+path = "src/main.rs"
+
+[dependencies]
+ytdlp-core = { path = "../core" }
+yt_dlp_backend = { path = "../yt_dlp_backend" }
+transcoder = { path = "../transcoder" }
+iced = { version = "0.12", features = ["advanced", "tokio", "svg"] }
+tokio = { version = "1", features = ["full"] }
+muda = "0.15"
+rfd = "0.14"
+uuid = { version = "1", features = ["v4"] }
+open = "5"
+dark-light = "1.1"
+libc = "0.2"
