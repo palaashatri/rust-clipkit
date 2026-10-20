@@ -10,6 +10,21 @@ A high-performance, native GUI wrapper for media download engines — built in R
 - **Transcoder** — convert downloaded files via ffmpeg with built-in presets and HDR-aware options (tone-map to SDR, preserve HDR/DV best-effort).
 - **Settings** — configure paths, theme (dark/light), GPU acceleration, and more.
 
+## Status
+
+There are no published releases yet: the tag-triggered release workflow last failed on both Linux targets (June 2026), and the macOS Intel job uses a retired runner. Build from source for now (see below). The engine updater does not yet verify checksums of the binaries it downloads.
+
+## Roadmap
+
+In priority order — each is something a user would notice:
+
+1. **Downloadable releases** for Windows, macOS and Linux (fix the release workflow, add CI on every push).
+2. **Safe engine updates:** verify downloaded engine binaries against the release's published SHA-256 sums before running them.
+3. **Pick a quality before downloading:** list the formats a URL offers (resolution, codec, size) and let the user choose, instead of typing a format string.
+4. **Playlists and channels:** expand a playlist into individual queue items with select/deselect.
+5. **A queue that survives restarts**, with retry for failed items.
+6. **Clipboard detection:** offer to queue a supported URL when one is copied.
+
 ## Prerequisites
 
 ### Build tools
