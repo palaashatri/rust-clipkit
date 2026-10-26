@@ -47,7 +47,7 @@ Events flow from Tokio tasks → `tokio::sync::broadcast` → Iced subscription 
 
 ## Suggested first tasks
 
-1. Commit `Cargo.lock`; add a CI workflow on push/PR running `fmt --check`, `clippy -D warnings`, `test` and a Linux build.
+1. `Cargo.lock` committed; CI workflow added (fmt, clippy -D warnings, test, Linux build).
 2. Fix the clippy warnings, then add tests for `option_map`, progress parsing and `presets`.
 3. Verify engine downloads against the release checksums.
 4. Fix the Linux release job and replace `macos-13` with a supported Intel macOS runner (or drop that target).
