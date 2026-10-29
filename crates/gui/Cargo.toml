@@ -11,7 +11,7 @@ path = "src/main.rs"
 ytdlp-core = { path = "../core" }
 yt_dlp_backend = { path = "../yt_dlp_backend" }
 transcoder = { path = "../transcoder" }
-iced = { version = "0.12", features = ["advanced", "tokio", "svg"] }
+iced = { version = "0.12", features = ["advanced", "tokio", "svg", "image"] }
 tokio = { version = "1", features = ["full"] }
 muda = "0.15"
 rfd = "0.14"
@@ -19,3 +19,7 @@ uuid = { version = "1", features = ["v4"] }
 open = "5"
 dark-light = "1.1"
 libc = "0.2"
+image = { version = "0.24", default-features = false, features = ["png"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"

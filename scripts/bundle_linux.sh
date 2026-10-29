@@ -1,5 +1,6 @@
 #!/bin/bash
 # bundle_linux.sh - Package ClipKit for Linux (tar.gz and AppImage)
+set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -37,7 +38,7 @@ cd ..
 
 # 3. Create AppImage (requires appimagetool)
 # In CI environments (like GitHub Actions), we might use an extracted appimagetool
-APPIMAGE_TOOL=$(command -v appimagetool || command -v ./appimagetool-x86_64.AppImage || echo "")
+APPIMAGE_TOOL=${APPIMAGE_TOOL:-$(command -v ./squashfs-root/AppRun || command -v appimagetool || command -v ./appimagetool-x86_64.AppImage || echo "")}
 
 if [ -n "$APPIMAGE_TOOL" ]; then
     APPIMAGE_ARCH="x86_64"
@@ -59,8 +60,11 @@ Type=Application
 Categories=Utility;
 EOF
 
-    # Minimal icon
-    if [ -f "assets/logo.svg" ]; then
+    # App icon
+    if [ -f "assets/brand/icon-256.png" ]; then
+        cp "assets/brand/icon-256.png" "dist/${APP_NAME}.AppDir/${APP_NAME}.png"
+        cp "assets/brand/icon-256.png" "dist/${APP_NAME}.AppDir/.DirIcon"
+    elif [ -f "assets/logo.svg" ]; then
         cp "assets/logo.svg" "dist/${APP_NAME}.AppDir/${APP_NAME}.svg"
     fi
 

@@ -1,9 +1,9 @@
+use crate::presets::TranscodePreset;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
 use uuid::Uuid;
-use crate::presets::TranscodePreset;
 
 // ── Download ──────────────────────────────────────────────────────────────────
 

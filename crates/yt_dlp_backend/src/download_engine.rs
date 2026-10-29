@@ -1,5 +1,4 @@
 use crate::option_map::build_ytdlp_args;
-use ytdlp_core::{AppEvent, DownloadPreset, DownloadProgress, DownloadResult, DownloadStage};
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -10,6 +9,7 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::{broadcast, Semaphore};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
+use ytdlp_core::{AppEvent, DownloadPreset, DownloadProgress, DownloadResult, DownloadStage};
 
 static PROGRESS_RE: OnceLock<Regex> = OnceLock::new();
 static DEST_RE: OnceLock<Regex> = OnceLock::new();
@@ -33,8 +33,7 @@ fn dest_re() -> &'static Regex {
 /// Matches "[Merger] Merging formats into '/path/file.ext'" (single or double quotes).
 fn merge_re() -> &'static Regex {
     MERGE_RE.get_or_init(|| {
-        Regex::new(r#"\[(?:Merger|ffmpeg)\]\s+Merging formats into\s+(?:"([^"]+)"|'([^']+)')"#)
-            .unwrap()
+        Regex::new(r#"\[(?:Merger|ffmpeg)\]\s+Merging formats into\s+["'](.*)["']\s*$"#).unwrap()
     })
 }
 
@@ -43,7 +42,7 @@ fn is_format_file(path: &std::path::Path) -> bool {
     path.file_stem()
         .and_then(|s| s.to_str())
         .map(|stem| {
-            stem.rfind('.').map_or(false, |pos| {
+            stem.rfind('.').is_some_and(|pos| {
                 let suffix = &stem[pos + 1..];
                 suffix.starts_with('f')
                     && suffix.len() > 1
@@ -145,9 +144,7 @@ async fn run_download(
         }
     };
 
-    tokio::fs::create_dir_all(&request.output_dir)
-        .await
-        .ok();
+    tokio::fs::create_dir_all(&request.output_dir).await.ok();
 
     let args = build_ytdlp_args(&request.url, &request.preset, &request.output_dir);
 
@@ -155,13 +152,12 @@ async fn run_download(
     cmd.args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    
+
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    
+
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -176,10 +172,10 @@ async fn run_download(
     // Merge stdout and stderr into our line reader (yt-dlp writes progress to stdout or stderr)
     let stdout = child.stdout.take().expect("stdout piped");
     let stderr = child.stderr.take().expect("stderr piped");
-    
+
     // Process output asynchronously
     let (tx, mut rx) = tokio::sync::mpsc::channel(1024);
-    
+
     let tx_out = tx.clone();
     tokio::spawn(async move {
         let mut lines = BufReader::new(stdout).lines();
@@ -197,12 +193,14 @@ async fn run_download(
     });
 
     let mut last_progress_emit: Option<Instant> = None;
+    let mut last_dest_path: Option<PathBuf> = None;
+    let mut emitted_output_path = false;
 
     while let Some(line) = rx.recv().await {
         // Progress line: [download]  55.3% of 123.45MiB at 2.34MiB/s ETA 00:45
         if let Some(caps) = progress_re().captures(&line) {
             let now = Instant::now();
-            if last_progress_emit.map_or(true, |t| now.duration_since(t) >= PROGRESS_THROTTLE) {
+            if last_progress_emit.is_none_or(|t| now.duration_since(t) >= PROGRESS_THROTTLE) {
                 let percent: f32 = caps[1].parse().unwrap_or(0.0);
                 let speed = caps.get(2).map(|m| m.as_str().to_string());
                 let eta = caps.get(3).map(|m| m.as_str().to_string());
@@ -229,19 +227,33 @@ async fn run_download(
                 if !path_str.is_empty() {
                     let path = PathBuf::from(path_str);
                     if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                        let _ = event_tx
-                            .send(AppEvent::DownloadTitle { job_id, title: stem.to_string() });
+                        let _ = event_tx.send(AppEvent::DownloadTitle {
+                            job_id,
+                            title: stem.to_string(),
+                        });
                     }
-                    let _ = event_tx.send(AppEvent::DownloadOutputPath { job_id, path });
+                    let _ = event_tx.send(AppEvent::DownloadOutputPath {
+                        job_id,
+                        path: path.clone(),
+                    });
+                    emitted_output_path = true;
+                    last_dest_path = Some(path);
                 }
             } else if let Some(caps) = dest_re().captures(&line) {
                 // "[ffmpeg] Destination:" lines (format conversion final output).
                 let path = PathBuf::from(caps[1].trim());
                 if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    let _ = event_tx
-                        .send(AppEvent::DownloadTitle { job_id, title: stem.to_string() });
+                    let _ = event_tx.send(AppEvent::DownloadTitle {
+                        job_id,
+                        title: stem.to_string(),
+                    });
                 }
-                let _ = event_tx.send(AppEvent::DownloadOutputPath { job_id, path });
+                let _ = event_tx.send(AppEvent::DownloadOutputPath {
+                    job_id,
+                    path: path.clone(),
+                });
+                emitted_output_path = true;
+                last_dest_path = Some(path);
             }
             let _ = event_tx.send(AppEvent::DownloadProgress {
                 job_id,
@@ -255,22 +267,40 @@ async fn run_download(
             });
         } else if let Some(caps) = dest_re().captures(&line) {
             let path = PathBuf::from(caps[1].trim());
-            // Only extract a title from non-intermediate-format files. yt-dlp names
-            // intermediate streams "title.f248.webm"; we skip those and wait for the
-            // merged output path (handled above) for multi-stream downloads.
+            last_dest_path = Some(path.clone());
+            // Only extract title and set output path immediately from non-intermediate format files.
+            // yt-dlp names intermediate streams "title.f248.webm"; for those, we defer until
+            // the merge step or emit on successful completion if no merge followed.
             if !is_format_file(&path) {
                 if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                    let _ = event_tx
-                        .send(AppEvent::DownloadTitle { job_id, title: stem.to_string() });
+                    let _ = event_tx.send(AppEvent::DownloadTitle {
+                        job_id,
+                        title: stem.to_string(),
+                    });
                 }
+                let _ = event_tx.send(AppEvent::DownloadOutputPath {
+                    job_id,
+                    path: path.clone(),
+                });
+                emitted_output_path = true;
             }
-            let _ = event_tx.send(AppEvent::DownloadOutputPath { job_id, path });
         }
     }
 
     let status = child.wait().await;
     match status {
         Ok(s) if s.success() => {
+            if !emitted_output_path {
+                if let Some(dest) = last_dest_path {
+                    if let Some(stem) = dest.file_stem().and_then(|s| s.to_str()) {
+                        let _ = event_tx.send(AppEvent::DownloadTitle {
+                            job_id,
+                            title: stem.to_string(),
+                        });
+                    }
+                    let _ = event_tx.send(AppEvent::DownloadOutputPath { job_id, path: dest });
+                }
+            }
             let _ = event_tx.send(AppEvent::DownloadCompleted {
                 job_id,
                 result: DownloadResult {
@@ -292,5 +322,93 @@ async fn run_download(
                 error: format!("Error waiting for yt-dlp: {}", e),
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_progress_regex_parsing() {
+        let sample1 = "[download]  45.2% of 100.00MiB at 4.25MiB/s ETA 00:12";
+        let caps = progress_re()
+            .captures(sample1)
+            .expect("Failed to match progress line");
+        assert_eq!(&caps[1], "45.2");
+        assert_eq!(&caps[2], "4.25MiB/s");
+        assert_eq!(&caps[3], "00:12");
+
+        let sample_approx = "[download]   0.5% of ~  2.34GiB at 10.50MiB/s ETA 03:45";
+        let caps2 = progress_re()
+            .captures(sample_approx)
+            .expect("Failed to match approximate progress");
+        assert_eq!(&caps2[1], "0.5");
+        assert_eq!(&caps2[2], "10.50MiB/s");
+        assert_eq!(&caps2[3], "03:45");
+    }
+
+    #[test]
+    fn test_dest_regex_parsing() {
+        let sample_download = "[download] Destination: /home/user/Downloads/Video Title.mp4";
+        let caps = dest_re()
+            .captures(sample_download)
+            .expect("Failed to match download destination");
+        assert_eq!(&caps[1], "/home/user/Downloads/Video Title.mp4");
+
+        let sample_audio = "[ExtractAudio] Destination: /tmp/music/Audio.mp3";
+        let caps_audio = dest_re()
+            .captures(sample_audio)
+            .expect("Failed to match audio destination");
+        assert_eq!(&caps_audio[1], "/tmp/music/Audio.mp3");
+
+        let sample_ffmpeg = "[ffmpeg] Destination: /tmp/output.mkv";
+        let caps_ffmpeg = dest_re()
+            .captures(sample_ffmpeg)
+            .expect("Failed to match ffmpeg destination");
+        assert_eq!(&caps_ffmpeg[1], "/tmp/output.mkv");
+    }
+
+    #[test]
+    fn test_merge_regex_parsing() {
+        let sample_double = r#"[Merger] Merging formats into "/path/to/Merged Video.mp4""#;
+        let caps = merge_re()
+            .captures(sample_double)
+            .expect("Failed to match double-quoted merger");
+        let path = caps.get(1).or_else(|| caps.get(2)).unwrap().as_str();
+        assert_eq!(path, "/path/to/Merged Video.mp4");
+
+        let sample_single = "[Merger] Merging formats into '/path/to/Merged Video.mp4'";
+        let caps_s = merge_re()
+            .captures(sample_single)
+            .expect("Failed to match single-quoted merger");
+        let path_s = caps_s.get(1).or_else(|| caps_s.get(2)).unwrap().as_str();
+        assert_eq!(path_s, "/path/to/Merged Video.mp4");
+
+        let sample_apostrophe = "[Merger] Merging formats into '/path/to/Don't Stop Believing.mp4'";
+        let caps_a = merge_re()
+            .captures(sample_apostrophe)
+            .expect("Failed to match single-quoted merger with apostrophe");
+        let path_a = caps_a.get(1).or_else(|| caps_a.get(2)).unwrap().as_str();
+        assert_eq!(path_a, "/path/to/Don't Stop Believing.mp4");
+
+        let sample_ffmpeg_merge = r#"[ffmpeg] Merging formats into "/media/movie.webm""#;
+        let caps_f = merge_re()
+            .captures(sample_ffmpeg_merge)
+            .expect("Failed to match ffmpeg merge");
+        let path_f = caps_f.get(1).or_else(|| caps_f.get(2)).unwrap().as_str();
+        assert_eq!(path_f, "/media/movie.webm");
+    }
+
+    #[test]
+    fn test_is_format_file() {
+        assert!(is_format_file(Path::new("video.f248.webm")));
+        assert!(is_format_file(Path::new("/tmp/some.video.f137.mp4")));
+        assert!(is_format_file(Path::new("track.f251.webm")));
+
+        assert!(!is_format_file(Path::new("video.mp4")));
+        assert!(!is_format_file(Path::new("video.final.webm")));
+        assert!(!is_format_file(Path::new("some.file.with.dots.mkv")));
     }
 }

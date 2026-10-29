@@ -6,6 +6,13 @@ mod theme;
 
 use iced::{Application, Settings};
 
+fn load_app_icon() -> Option<iced::window::Icon> {
+    let bytes = include_bytes!("../../../assets/brand/icon-256.png");
+    let img = image::load_from_memory(bytes).ok()?.to_rgba8();
+    let (width, height) = img.dimensions();
+    iced::window::icon::from_rgba(img.into_raw(), width, height).ok()
+}
+
 fn main() -> iced::Result {
     // Redirect stdout/stderr to /dev/null in release builds on macOS to avoid console noise
     #[cfg(all(target_os = "macos", not(debug_assertions)))]
@@ -25,6 +32,7 @@ fn main() -> iced::Result {
             size: iced::Size::new(1100.0, 750.0),
             min_size: Some(iced::Size::new(900.0, 600.0)),
             transparent: false,
+            icon: load_app_icon(),
             #[cfg(target_os = "macos")]
             platform_specific: iced::window::settings::PlatformSpecific {
                 title_hidden: true,

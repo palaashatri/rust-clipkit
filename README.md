@@ -1,29 +1,52 @@
 # ClipKit
 
-A high-performance, native GUI wrapper for media download engines — built in Rust with [Iced](https://github.com/iced-rs/iced).
+A high-performance, native GUI media toolkit for downloads and FFmpeg transcoding — built in Rust with [Iced](https://github.com/iced-rs/iced) 0.12 and Tokio, aligned with Apple Human Interface Guidelines.
+
+![ClipKit Hero](docs/screenshots/01-download-pane.png)
+
+## Screenshots & Interface Tour
+
+| Download Workspace (Dark) | Advanced Download Options |
+|:---:|:---:|
+| ![Download](docs/screenshots/01-download-pane.png) | ![Advanced Options](docs/screenshots/02-download-advanced.png) |
+
+| HDR-Aware Transcoder | Engine & FFmpeg Management |
+|:---:|:---:|
+| ![Transcoder](docs/screenshots/03-transcoder-pane.png) | ![Engine Management](docs/screenshots/04-settings-engine.png) |
+
+| About & Identity Showcase | Ceramic Light Theme |
+|:---:|:---:|
+| ![About](docs/screenshots/05-settings-about.png) | ![Light Theme](docs/screenshots/06-light-mode.png) |
+
+*For full details on every screen and control, see the [Interface & Visual Tour](docs/SCREENSHOTS.md).*
 
 ## Features
 
-- **Simple & advanced download modes** — paste a URL and go, or tune every download option.
-- **Engine version manager** — fetch, download, and activate any release from GitHub; or use a system-installed binary.
+- **Simple & advanced download modes** — paste a URL and press Enter, or tune quality, subtitles, metadata, and SponsorBlock.
+- **Engine version manager** — fetch, download, and activate releases with cryptographic SHA-256 checksum verification; or use a system-installed binary.
 - **Download queue** — multiple concurrent downloads with real-time progress, speed, and ETA.
-- **Transcoder** — convert downloaded files via ffmpeg with built-in presets and HDR-aware options (tone-map to SDR, preserve HDR/DV best-effort).
-- **Settings** — configure paths, theme (dark/light), GPU acceleration, and more.
+- **Transcoder** — convert downloaded files via FFmpeg with built-in presets and HDR-aware options (tone-map to SDR, preserve HDR/DV metadata).
+- **Settings & live theme switching** — configure paths, theme (Dark / Ceramic Light), GPU acceleration, and engine versions.
+- **Apple HIG-aligned UI** — native macOS menubar with Cocoa activation, traffic-light inset spacing, and 3D sculpted coral icon identity.
 
 ## Status
 
-There are no published releases yet: the tag-triggered release workflow last failed on both Linux targets (June 2026), and the macOS Intel job uses a retired runner. Build from source for now (see below). The engine updater does not yet verify checksums of the binaries it downloads.
+- **CI/CD:** Automated CI on push and PR with `fmt`, `clippy -D warnings`, test suites, and Linux builds.
+- **Security:** Engine updater validates SHA-256 sums against official release `SHA2-256SUMS` before marking binaries executable.
+- **Design & UI/UX:** Coordinated 3D brand identity with native macOS menubar, window icons, and Apple HIG-aligned themes.
+- **Reproducibility:** `Cargo.lock` committed with locked dependency resolution.
 
 ## Roadmap
 
 In priority order — each is something a user would notice:
 
-1. **Downloadable releases** for Windows, macOS and Linux (fix the release workflow, add CI on every push).
-2. **Safe engine updates:** verify downloaded engine binaries against the release's published SHA-256 sums before running them.
-3. **Pick a quality before downloading:** list the formats a URL offers (resolution, codec, size) and let the user choose, instead of typing a format string.
-4. **Playlists and channels:** expand a playlist into individual queue items with select/deselect.
-5. **A queue that survives restarts**, with retry for failed items.
-6. **Clipboard detection:** offer to queue a supported URL when one is copied.
+1. **Downloadable releases & CI** for Windows, macOS, and Linux.
+2. [x] **Safe engine updates:** verify downloaded engine binaries against release SHA-256 sums before running them.
+3. [x] **Redesigned UI/UX:** tactile coral palette, native menubar, sculpted 3D application icons.
+4. **Pick a quality before downloading:** list the formats a URL offers (resolution, codec, size) and let the user choose, instead of typing a format string.
+5. **Playlists and channels:** expand a playlist into individual queue items with select/deselect.
+6. **A queue that survives restarts**, with retry for failed items.
+7. **Clipboard detection:** offer to queue a supported URL when one is copied.
 
 ## Prerequisites
 

@@ -14,10 +14,7 @@ struct GhRelease {
 /// Checks GitHub for a newer ClipKit release.
 /// Returns `Some(AppUpdateInfo)` if a newer version is available, `None` otherwise.
 pub async fn check_for_app_update() -> Option<AppUpdateInfo> {
-    let client = Client::builder()
-        .user_agent("clipkit/0.1")
-        .build()
-        .ok()?;
+    let client = Client::builder().user_agent("clipkit/0.1").build().ok()?;
 
     let resp = client
         .get(RELEASES_API)

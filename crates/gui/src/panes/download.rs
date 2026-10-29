@@ -95,6 +95,11 @@ impl DownloadPane {
         self.manager.set_ytdlp_path(path);
     }
 
+    #[allow(dead_code)]
+    pub fn set_advanced_open(&mut self, open: bool) {
+        self.advanced_open = open;
+    }
+
     pub fn handle_event(&mut self, event: &AppEvent) -> Command<DownloadPaneMessage> {
         match event {
             AppEvent::DownloadProgress { job_id, progress } => {
@@ -180,25 +185,32 @@ impl DownloadPane {
                 if url.is_empty() {
                     return Command::none();
                 }
-                let mut preset = DownloadPreset::default();
-                preset.content_type = self.content_type.clone();
-                preset.video_quality = self.quality.clone();
-                preset.video_container = self.container.clone();
-                preset.audio_format = self.audio_format.clone();
-                preset.embed_metadata = self.embed_metadata;
-                preset.embed_thumbnail = self.embed_thumbnail;
-                preset.sponsorblock.enabled = self.sponsorblock;
-                preset.output_template = self.output_template.clone();
-                preset.subtitles.download = self.subtitle_download;
-                preset.subtitles.embed = self.subtitle_embed;
-                preset.subtitles.auto_generated = self.subtitle_auto_gen;
-                preset.subtitles.languages = self
-                    .subtitle_languages
-                    .split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect();
-                preset.prefer_hdr = self.prefer_hdr;
+                let preset = DownloadPreset {
+                    content_type: self.content_type.clone(),
+                    video_quality: self.quality.clone(),
+                    video_container: self.container.clone(),
+                    audio_format: self.audio_format.clone(),
+                    embed_metadata: self.embed_metadata,
+                    embed_thumbnail: self.embed_thumbnail,
+                    sponsorblock: ytdlp_core::SponsorBlockOptions {
+                        enabled: self.sponsorblock,
+                        ..Default::default()
+                    },
+                    output_template: self.output_template.clone(),
+                    subtitles: ytdlp_core::SubtitleOptions {
+                        download: self.subtitle_download,
+                        embed: self.subtitle_embed,
+                        auto_generated: self.subtitle_auto_gen,
+                        languages: self
+                            .subtitle_languages
+                            .split(',')
+                            .map(|s| s.trim().to_string())
+                            .filter(|s| !s.is_empty())
+                            .collect(),
+                    },
+                    prefer_hdr: self.prefer_hdr,
+                    ..Default::default()
+                };
 
                 let job = DownloadJob::new(url.clone());
                 let job_id = job.id;
@@ -277,17 +289,15 @@ impl DownloadPane {
         let url_bar = row![
             text_input("https://video-site.com/watch?v=…", &self.url)
                 .on_input(DownloadPaneMessage::UrlChanged)
+                .on_submit(DownloadPaneMessage::StartDownload)
                 .style(theme::input())
                 .padding([15, 18])
                 .size(theme::size::BODY)
                 .width(Length::Fill),
-            button(
-                text("Download")
-                    .size(theme::size::SUBHEAD)
-            )
-            .on_press(DownloadPaneMessage::StartDownload)
-            .padding([15, 30])
-            .style(theme::button::primary()),
+            button(text("Download").size(theme::size::SUBHEAD))
+                .on_press(DownloadPaneMessage::StartDownload)
+                .padding([15, 30])
+                .style(theme::button::primary()),
         ]
         .spacing(12)
         .align_items(Alignment::Center);
@@ -511,8 +521,7 @@ impl DownloadPane {
             format!("{} items", self.jobs.len())
         };
         let queue_header = row![
-            text("Queue")
-                .size(theme::size::HEADLINE),
+            text("Queue").size(theme::size::HEADLINE),
             text(format!("  ·  {}", count_str))
                 .size(theme::size::SUBHEAD)
                 .style(iced::theme::Text::Color(theme::color::secondary())),
@@ -660,20 +669,15 @@ fn job_row(job: &DownloadJob) -> Element<'_, DownloadPaneMessage> {
 
     let url_display = truncate_url(&job.url, 80);
 
-    let status_chip = container(
-        text(status_label)
-            .size(theme::size::CAPTION),
-    )
-    .style(theme::chip(chip_kind))
-    .padding([3, 9]);
+    let status_chip = container(text(status_label).size(theme::size::CAPTION))
+        .style(theme::chip(chip_kind))
+        .padding([3, 9]);
 
     container(
         column![
             row![
                 column![
-                    text(title)
-                        .size(theme::size::FOOTNOTE)
-                        .width(Length::Fill),
+                    text(title).size(theme::size::FOOTNOTE).width(Length::Fill),
                     Space::with_height(4),
                     text(url_display)
                         .size(theme::size::CAPTION)
@@ -683,8 +687,7 @@ fn job_row(job: &DownloadJob) -> Element<'_, DownloadPaneMessage> {
                 .spacing(0)
                 .width(Length::Fill),
                 Space::with_width(10),
-                column![status_chip, Space::with_height(6), action,]
-                    .align_items(Alignment::End),
+                column![status_chip, Space::with_height(6), action,].align_items(Alignment::End),
             ]
             .align_items(Alignment::Center),
             Space::with_height(8),
