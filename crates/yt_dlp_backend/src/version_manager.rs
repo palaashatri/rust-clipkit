@@ -30,6 +30,8 @@ pub enum VersionManagerError {
     },
     #[error("Checksum for {filename} not found in SHA2-256SUMS")]
     ChecksumNotFound { filename: String },
+    #[error("Invalid release tag '{0}': contains unsupported characters or directory traversal sequences")]
+    InvalidTag(String),
 }
 
 #[derive(Debug, Deserialize)]
@@ -144,8 +146,7 @@ pub struct VersionManager {
 impl VersionManager {
     pub fn new(bin_dir: PathBuf, event_tx: Arc<broadcast::Sender<AppEvent>>) -> Self {
         let client = Client::builder()
-            .timeout(Duration::from_secs(60))
-            .connect_timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(15))
             .user_agent("clipkit/0.1")
             .build()
             .expect("Failed to build HTTP client");
@@ -189,6 +190,7 @@ impl VersionManager {
             .client
             .get(url)
             .header("Accept", "application/vnd.github+json")
+            .timeout(Duration::from_secs(30))
             .send()
             .await?
             .error_for_status()?
@@ -245,6 +247,7 @@ impl VersionManager {
         let text = self
             .client
             .get(&sums_url)
+            .timeout(Duration::from_secs(30))
             .send()
             .await?
             .error_for_status()?
@@ -257,6 +260,10 @@ impl VersionManager {
         use tokio::io::AsyncWriteExt;
 
         let clean_tag = sanitize_tag(&version.tag_name);
+        if clean_tag.is_empty() || clean_tag == "unknown" || clean_tag != version.tag_name {
+            return Err(VersionManagerError::InvalidTag(version.tag_name.clone()));
+        }
+
         let version_dir = self.bin_dir.join(&clean_tag);
         tokio::fs::create_dir_all(&version_dir).await?;
 
@@ -296,6 +303,7 @@ impl VersionManager {
         let mut response = self
             .client
             .get(&version.download_url)
+            .timeout(Duration::from_secs(600))
             .send()
             .await?
             .error_for_status()?;
@@ -454,5 +462,9 @@ e02319f390099516ca4d7dfae54302c0b4ebf5139fb2b58872b7a9fbb00bc8e5  yt-dlp_macos
         assert_eq!(sanitize_tag("../../etc/cron.d"), "etccron.d");
         assert_eq!(sanitize_tag("/absolute/path"), "absolutepath");
         assert_eq!(sanitize_tag(".."), "unknown");
+
+        // Verify that tags containing unsupported characters differ from the original
+        let invalid_tag = "v1.0+build2";
+        assert_ne!(sanitize_tag(invalid_tag), invalid_tag);
     }
 }

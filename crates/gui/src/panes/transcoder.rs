@@ -181,6 +181,10 @@ impl TranscoderPane {
                 self.selected_preset.name = "Custom".to_string();
             }
             TranscoderPaneMessage::VideoCodecSelected(v) => {
+                if matches!(v, VideoCodec::Copy) {
+                    self.selected_preset.resolution = Resolution::Source;
+                    self.selected_preset.hdr_policy = HdrPolicy::Preserve;
+                }
                 self.selected_preset.video_codec = v;
                 self.selected_preset.name = "Custom".to_string();
             }
@@ -189,6 +193,11 @@ impl TranscoderPane {
                 self.selected_preset.name = "Custom".to_string();
             }
             TranscoderPaneMessage::ResolutionSelected(r) => {
+                if !matches!(r, Resolution::Source)
+                    && matches!(self.selected_preset.video_codec, VideoCodec::Copy)
+                {
+                    self.selected_preset.video_codec = VideoCodec::H264;
+                }
                 self.selected_preset.resolution = r;
                 self.selected_preset.name = "Custom".to_string();
             }
@@ -201,11 +210,17 @@ impl TranscoderPane {
                 self.selected_preset.name = "Custom".to_string();
             }
             TranscoderPaneMessage::HdrPolicyToggled(b) => {
-                self.selected_preset.hdr_policy = if b {
+                let policy = if b {
                     HdrPolicy::Preserve
                 } else {
                     HdrPolicy::ToneMapToSdr
                 };
+                if matches!(policy, HdrPolicy::ToneMapToSdr)
+                    && matches!(self.selected_preset.video_codec, VideoCodec::Copy)
+                {
+                    self.selected_preset.video_codec = VideoCodec::H264;
+                }
+                self.selected_preset.hdr_policy = policy;
                 self.selected_preset.name = "Custom".to_string();
             }
             TranscoderPaneMessage::CommandPreviewToggled => {

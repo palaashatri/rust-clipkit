@@ -8,17 +8,15 @@ set BIN_NAME=clipkit.exe
 set DIST_DIR=dist
 set TARGET=%1
 
-if "%TARGET%"=="" (
-    echo [INFO] Building release binary...
-    cargo build --release -p gui
-    if errorlevel 1 exit /b %errorlevel%
-    set BIN_PATH=target\release\%BIN_NAME%
-) else (
-    echo [INFO] Building release binary for %TARGET%...
-    cargo build --release -p gui --target %TARGET%
-    if errorlevel 1 exit /b %errorlevel%
-    set BIN_PATH=target\%TARGET%\release\%BIN_NAME%
+set "BUILD_ARGS=--release -p gui"
+set "BIN_PATH=target\release\%BIN_NAME%"
+if not "%TARGET%"=="" (
+    set "BUILD_ARGS=%BUILD_ARGS% --target %TARGET%"
+    set "BIN_PATH=target\%TARGET%\release\%BIN_NAME%"
 )
+echo [INFO] Building release binary...
+cargo build %BUILD_ARGS%
+if errorlevel 1 exit /b 1
 
 if not exist %DIST_DIR% mkdir %DIST_DIR%
 

@@ -266,6 +266,23 @@ impl ContainerFormat {
         )
     }
 
+    pub fn is_video(&self) -> bool {
+        !matches!(
+            self,
+            ContainerFormat::Mp3
+                | ContainerFormat::Aac
+                | ContainerFormat::Flac
+                | ContainerFormat::Ogg
+                | ContainerFormat::Wav
+                | ContainerFormat::Wma
+                | ContainerFormat::M4a
+        )
+    }
+
+    pub fn is_audio_only(&self) -> bool {
+        !self.is_video()
+    }
+
     pub fn extension(&self) -> &'static str {
         match self {
             ContainerFormat::Mp4 => "mp4",
@@ -285,6 +302,63 @@ impl ContainerFormat {
             ContainerFormat::Ts => "ts",
             ContainerFormat::Vob => "vob",
             ContainerFormat::Gif => "gif",
+        }
+    }
+
+    pub fn supports_video_codec(&self, codec: &VideoCodec) -> bool {
+        if !self.is_video() {
+            return false;
+        }
+        match self {
+            ContainerFormat::Mp4 => matches!(
+                codec,
+                VideoCodec::H264
+                    | VideoCodec::H265
+                    | VideoCodec::Av1
+                    | VideoCodec::Mpeg4
+                    | VideoCodec::Copy
+            ),
+            ContainerFormat::Mkv => true,
+            ContainerFormat::WebM => matches!(
+                codec,
+                VideoCodec::Vp9 | VideoCodec::Vp8 | VideoCodec::Av1 | VideoCodec::Copy
+            ),
+            ContainerFormat::Mov => matches!(
+                codec,
+                VideoCodec::H264
+                    | VideoCodec::H265
+                    | VideoCodec::ProRes
+                    | VideoCodec::Mpeg4
+                    | VideoCodec::Mjpeg
+                    | VideoCodec::Copy
+            ),
+            ContainerFormat::Avi => matches!(
+                codec,
+                VideoCodec::Mpeg4
+                    | VideoCodec::Mpeg2
+                    | VideoCodec::Mpeg1
+                    | VideoCodec::Mjpeg
+                    | VideoCodec::Copy
+            ),
+            ContainerFormat::Flv => matches!(codec, VideoCodec::H264 | VideoCodec::Copy),
+            ContainerFormat::Ts => matches!(
+                codec,
+                VideoCodec::H264 | VideoCodec::H265 | VideoCodec::Mpeg2 | VideoCodec::Copy
+            ),
+            ContainerFormat::Vob => {
+                matches!(
+                    codec,
+                    VideoCodec::Mpeg2 | VideoCodec::Mpeg1 | VideoCodec::Copy
+                )
+            }
+            ContainerFormat::ThreeGp => {
+                matches!(
+                    codec,
+                    VideoCodec::H264 | VideoCodec::Mpeg4 | VideoCodec::Copy
+                )
+            }
+            ContainerFormat::Gif => matches!(codec, VideoCodec::Gif | VideoCodec::Copy),
+            _ => false,
         }
     }
 }
@@ -326,6 +400,7 @@ pub enum VideoCodec {
     Mpeg1,
     Theora,
     Mjpeg,
+    Gif,
     Copy,
 }
 
@@ -344,6 +419,7 @@ impl VideoCodec {
             VideoCodec::Mpeg1,
             VideoCodec::Theora,
             VideoCodec::Mjpeg,
+            VideoCodec::Gif,
         ]
     }
 }
@@ -362,6 +438,7 @@ impl std::fmt::Display for VideoCodec {
             VideoCodec::Mpeg1 => write!(f, "MPEG-1"),
             VideoCodec::Theora => write!(f, "Theora"),
             VideoCodec::Mjpeg => write!(f, "MJPEG"),
+            VideoCodec::Gif => write!(f, "GIF"),
             VideoCodec::Copy => write!(f, "Copy (no re-encode)"),
         }
     }
@@ -610,14 +687,14 @@ impl TranscodePreset {
             TranscodePreset {
                 name: "GIF (Social Media)".to_string(),
                 container: ContainerFormat::Gif,
-                video_codec: VideoCodec::Mjpeg,
+                video_codec: VideoCodec::Gif,
                 audio_codec: AudioCodec::Copy,
                 resolution: Resolution::Res480p,
                 hdr_policy: HdrPolicy::ToneMapToSdr,
                 crf: 4,
                 speed: EncodingPreset::Medium,
                 audio_bitrate_kbps: None,
-                use_gpu: true,
+                use_gpu: false,
             },
             TranscodePreset {
                 name: "AVI Xvid 720p (Legacy)".to_string(),
@@ -693,12 +770,21 @@ mod tests {
         let presets = TranscodePreset::builtin_presets();
         assert!(!presets.is_empty());
 
-        // Check that every preset has non-empty name and matches its container extension
+        // Check that every preset has non-empty name, valid extensions, and container-codec compatibility
         for p in &presets {
             assert!(!p.name.is_empty());
             assert!(!p.container.extension().is_empty());
             assert!(!p.video_codec.to_string().is_empty());
             assert!(!p.audio_codec.to_string().is_empty());
+            if p.container.is_video() {
+                assert!(
+                    p.container.supports_video_codec(&p.video_codec),
+                    "Preset '{}' uses codec {:?} incompatible with container {:?}",
+                    p.name,
+                    p.video_codec,
+                    p.container
+                );
+            }
         }
 
         // Must include popular presets

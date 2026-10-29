@@ -409,6 +409,7 @@ impl Application for App {
 
 impl App {
     fn sidebar_nav(&self) -> Element<'_, Message> {
+        let is_dark = matches!(self.theme(), Theme::Dark);
         let nav_item =
             |icon: theme::NavIcon, label: &'static str, pane: Pane| -> Element<'_, Message> {
                 let active = self.active_pane == pane;
@@ -421,9 +422,9 @@ impl App {
                     text(label)
                         .size(theme::size::SUBHEAD)
                         .style(if active {
-                            iced::theme::Text::Color(theme::color::accent())
+                            iced::theme::Text::Color(theme::color::accent_text(is_dark))
                         } else {
-                            iced::theme::Text::Color(theme::color::secondary())
+                            iced::theme::Text::Color(theme::color::secondary_text(is_dark))
                         })
                         .width(Length::Fill),
                 ]
@@ -452,7 +453,9 @@ impl App {
                     text("ClipKit").size(19).style(iced::theme::Text::Default),
                     text("Media Toolkit")
                         .size(11)
-                        .style(iced::theme::Text::Color(theme::color::secondary())),
+                        .style(iced::theme::Text::Color(theme::color::secondary_text(
+                            is_dark
+                        ))),
                 ]
                 .spacing(1),
             ]
@@ -469,11 +472,11 @@ impl App {
                     row![
                         text("↑")
                             .size(theme::size::CAPTION)
-                            .style(iced::theme::Text::Color(theme::color::accent())),
+                            .style(iced::theme::Text::Color(theme::color::accent_text(is_dark))),
                         Space::with_width(6),
                         text(format!("{} available", info.version))
                             .size(theme::size::CAPTION)
-                            .style(iced::theme::Text::Color(theme::color::accent())),
+                            .style(iced::theme::Text::Color(theme::color::accent_text(is_dark))),
                     ]
                     .align_items(Alignment::Center),
                 )
@@ -487,14 +490,12 @@ impl App {
         };
 
         // Runtime status badge (indicates active engine)
-        let engine_status_str = match &self.config.active_ytdlp_version {
-            Some(v) => format!("yt-dlp {}", v),
-            None => {
-                if self.config.use_system_ytdlp {
-                    "System yt-dlp".to_string()
-                } else {
-                    "yt-dlp ready".to_string()
-                }
+        let engine_status_str = if self.config.use_system_ytdlp {
+            "System yt-dlp".to_string()
+        } else {
+            match &self.config.active_ytdlp_version {
+                Some(v) => format!("yt-dlp {}", v),
+                None => "yt-dlp ready".to_string(),
             }
         };
 
@@ -513,7 +514,9 @@ impl App {
                 Space::with_width(8),
                 text(engine_status_str)
                     .size(11)
-                    .style(iced::theme::Text::Color(theme::color::secondary())),
+                    .style(iced::theme::Text::Color(theme::color::secondary_text(
+                        is_dark
+                    ))),
             ]
             .align_items(Alignment::Center),
         )

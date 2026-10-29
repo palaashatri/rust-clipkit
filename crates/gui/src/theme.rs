@@ -24,6 +24,14 @@ pub mod color {
     pub fn accent() -> Color {
         Color::from_rgb8(255, 119, 80)
     }
+    /// High-contrast accent color for text labels in light mode (WCAG AA ≥ 4.5:1, #A03219).
+    pub fn accent_text(is_dark: bool) -> Color {
+        if is_dark {
+            Color::from_rgb8(255, 119, 80)
+        } else {
+            Color::from_rgb8(160, 50, 25)
+        }
+    }
     pub fn accent_hover() -> Color {
         Color::from_rgb8(255, 140, 105)
     }
@@ -50,8 +58,17 @@ pub mod color {
     pub fn danger() -> Color {
         Color::from_rgb8(239, 93, 101)
     }
+    /// Secondary text color: slate-400 in dark mode (#94A3B8), slate-600 in light mode (#5B6577).
+    pub fn secondary_text(is_dark: bool) -> Color {
+        if is_dark {
+            Color::from_rgb8(148, 163, 184)
+        } else {
+            Color::from_rgb8(91, 101, 119)
+        }
+    }
+    /// Default fallback secondary color ensuring ≥ 4.7:1 contrast on light surfaces (#64748B).
     pub fn secondary() -> Color {
-        Color::from_rgb8(148, 163, 184)
+        Color::from_rgb8(100, 116, 139)
     }
     pub fn tertiary() -> Color {
         Color::from_rgb8(100, 116, 139)
@@ -601,7 +618,7 @@ pub mod button {
                                 color: Color::from_rgba(1.0, 0.467, 0.314, 0.35),
                             },
                             text_color: if is_light(theme) {
-                                Color::from_rgb8(210, 80, 45)
+                                Color::from_rgb8(160, 50, 25)
                             } else {
                                 color::accent()
                             },
@@ -610,7 +627,7 @@ pub mod button {
                     } else {
                         iced_button::Appearance {
                             text_color: if is_light(theme) {
-                                Color::from_rgb8(100, 116, 139)
+                                Color::from_rgb8(91, 101, 119)
                             } else {
                                 color::secondary()
                             },

@@ -40,7 +40,7 @@ A high-performance, native GUI media toolkit for downloads and FFmpeg transcodin
 
 In priority order — each is something a user would notice:
 
-1. [x] **Downloadable releases & CI** for Windows, macOS, and Linux.
+1. **Downloadable releases & CI** for Windows, macOS, and Linux.
 2. [x] **Safe engine updates:** verify downloaded engine binaries against release SHA-256 sums before running them.
 3. [x] **Redesigned UI/UX:** tactile coral palette, native menubar, sculpted 3D application icons.
 4. **Pick a quality before downloading:** list the formats a URL offers (resolution, codec, size) and let the user choose, instead of typing a format string.

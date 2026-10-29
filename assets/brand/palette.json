@@ -1,6 +1,9 @@
 {
   "app": "rust-clipkit",
   "accent": "#FF7750",
+  "accentTextLight": "#A03219",
+  "secondaryTextDark": "#94A3B8",
+  "secondaryTextLight": "#5B6577",
   "background": "#101720",
   "foreground": "#F4F7FC",
   "style": "dimensional ceramic and translucent glass",

@@ -193,6 +193,8 @@ async fn run_download(
     });
 
     let mut last_progress_emit: Option<Instant> = None;
+    let mut last_dest_path: Option<PathBuf> = None;
+    let mut emitted_output_path = false;
 
     while let Some(line) = rx.recv().await {
         // Progress line: [download]  55.3% of 123.45MiB at 2.34MiB/s ETA 00:45
@@ -230,7 +232,12 @@ async fn run_download(
                             title: stem.to_string(),
                         });
                     }
-                    let _ = event_tx.send(AppEvent::DownloadOutputPath { job_id, path });
+                    let _ = event_tx.send(AppEvent::DownloadOutputPath {
+                        job_id,
+                        path: path.clone(),
+                    });
+                    emitted_output_path = true;
+                    last_dest_path = Some(path);
                 }
             } else if let Some(caps) = dest_re().captures(&line) {
                 // "[ffmpeg] Destination:" lines (format conversion final output).
@@ -241,7 +248,12 @@ async fn run_download(
                         title: stem.to_string(),
                     });
                 }
-                let _ = event_tx.send(AppEvent::DownloadOutputPath { job_id, path });
+                let _ = event_tx.send(AppEvent::DownloadOutputPath {
+                    job_id,
+                    path: path.clone(),
+                });
+                emitted_output_path = true;
+                last_dest_path = Some(path);
             }
             let _ = event_tx.send(AppEvent::DownloadProgress {
                 job_id,
@@ -255,9 +267,10 @@ async fn run_download(
             });
         } else if let Some(caps) = dest_re().captures(&line) {
             let path = PathBuf::from(caps[1].trim());
-            // Only extract title and set output path from non-intermediate format files.
-            // yt-dlp names intermediate streams "title.f248.webm"; we skip those and wait
-            // for the merged output path (handled above) for multi-stream downloads.
+            last_dest_path = Some(path.clone());
+            // Only extract title and set output path immediately from non-intermediate format files.
+            // yt-dlp names intermediate streams "title.f248.webm"; for those, we defer until
+            // the merge step or emit on successful completion if no merge followed.
             if !is_format_file(&path) {
                 if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                     let _ = event_tx.send(AppEvent::DownloadTitle {
@@ -265,7 +278,11 @@ async fn run_download(
                         title: stem.to_string(),
                     });
                 }
-                let _ = event_tx.send(AppEvent::DownloadOutputPath { job_id, path });
+                let _ = event_tx.send(AppEvent::DownloadOutputPath {
+                    job_id,
+                    path: path.clone(),
+                });
+                emitted_output_path = true;
             }
         }
     }
@@ -273,6 +290,17 @@ async fn run_download(
     let status = child.wait().await;
     match status {
         Ok(s) if s.success() => {
+            if !emitted_output_path {
+                if let Some(dest) = last_dest_path {
+                    if let Some(stem) = dest.file_stem().and_then(|s| s.to_str()) {
+                        let _ = event_tx.send(AppEvent::DownloadTitle {
+                            job_id,
+                            title: stem.to_string(),
+                        });
+                    }
+                    let _ = event_tx.send(AppEvent::DownloadOutputPath { job_id, path: dest });
+                }
+            }
             let _ = event_tx.send(AppEvent::DownloadCompleted {
                 job_id,
                 result: DownloadResult {

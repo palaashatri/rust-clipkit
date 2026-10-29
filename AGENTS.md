@@ -21,7 +21,7 @@ Linux build dependencies (from the release workflow): `pkg-config libxkbcommon-d
 cargo build                      # debug build of the whole workspace
 cargo run --release -p gui       # the app; binary is target/release/clipkit
 cargo test --workspace
-cargo clippy --workspace --all-targets -- -D warnings   # goal; currently fails with 10 warnings
+cargo clippy --workspace --all-targets -- -D warnings   # required by CI; must report 0 warnings
 cargo fmt --all -- --check
 scripts/build.sh | scripts\build.bat                    # build-and-run helpers
 scripts/bundle_{linux,macos}.sh, scripts/bundle_windows.bat  # release bundles (AppImage/tar.gz, .app/.dmg, zip)

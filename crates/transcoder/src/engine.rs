@@ -228,6 +228,9 @@ pub fn build_ffmpeg_args(request: &TranscodeRequest) -> Vec<String> {
                 args.extend(["-c:v".into(), "mjpeg".into()]);
                 args.extend(["-qscale:v".into(), preset.crf.to_string()]);
             }
+            VideoCodec::Gif => {
+                args.extend(["-c:v".into(), "gif".into()]);
+            }
         }
 
         // Resolution scaling
@@ -323,6 +326,23 @@ async fn run_transcode(
                 .to_string(),
         });
         return;
+    }
+
+    if matches!(request.preset.video_codec, VideoCodec::Copy) {
+        if !matches!(request.preset.resolution, Resolution::Source) {
+            let _ = event_tx.send(AppEvent::TranscodeFailed {
+                job_id,
+                error: "Stream copy (Video Codec: Copy) cannot resize video. Please select an encoder codec or set Resolution to 'Same as source'.".to_string(),
+            });
+            return;
+        }
+        if matches!(request.preset.hdr_policy, HdrPolicy::ToneMapToSdr) {
+            let _ = event_tx.send(AppEvent::TranscodeFailed {
+                job_id,
+                error: "Stream copy (Video Codec: Copy) cannot tone-map HDR. Please select an encoder codec or set HDR to 'Preserve HDR'.".to_string(),
+            });
+            return;
+        }
     }
 
     let ffmpeg = match ffmpeg_path {
