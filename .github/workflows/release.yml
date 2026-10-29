@@ -78,6 +78,8 @@ jobs:
             libxcb-render0-dev \
             libvulkan-dev \
             libgles2-mesa-dev \
+            libglib2.0-dev \
+            libgtk-3-dev \
             mesa-vulkan-drivers \
             librsvg2-bin
 

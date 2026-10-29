@@ -15,7 +15,7 @@ ClipKit is a native desktop GUI (Rust + [Iced](https://github.com/iced-rs/iced) 
 
 ## Commands
 
-Linux build dependencies (from the release workflow): `pkg-config libxkbcommon-dev libwayland-dev wayland-protocols libx11-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libxcb-render0-dev libvulkan-dev libgles2-mesa-dev`.
+Linux build dependencies (from the release workflow): `pkg-config libxkbcommon-dev libwayland-dev wayland-protocols libx11-dev libxcb1-dev libxcb-shape0-dev libxcb-xfixes0-dev libxcb-render0-dev libvulkan-dev libgles2-mesa-dev libglib2.0-dev libgtk-3-dev`.
 
 ```bash
 cargo build                      # debug build of the whole workspace
