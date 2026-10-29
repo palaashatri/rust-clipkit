@@ -1,0 +1,13 @@
+{
+  "name": "ClipKit",
+  "category": "Media downloader & transcoder",
+  "background": [
+    "#324859",
+    "#1a2937"
+  ],
+  "accent": "#89bfb6",
+  "highlight": "#d5ece2",
+  "typography": "Inter, Segoe UI, Arial",
+  "style": "muted-metal / enamel / soft-depth",
+  "license": "original project artwork"
+}

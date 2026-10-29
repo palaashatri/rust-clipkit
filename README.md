@@ -1,5 +1,10 @@
 # ClipKit
 
+<img src="assets/brand/app-icon.svg" alt="ClipKit icon" width="96" align="right" />
+
+[Icon, wordmark, and brand assets](assets/brand/README.md)
+
+
 A high-performance, native GUI wrapper for media download engines — built in Rust with [Iced](https://github.com/iced-rs/iced).
 
 ## Features
