@@ -35,6 +35,7 @@ pub enum Message {
     Transcoder(TranscoderPaneMessage),
     Settings(SettingsPaneMessage),
     AppEvent(AppEvent),
+    #[allow(dead_code)]
     MenuEvent(String),
     FfmpegDetected(Option<PathBuf>),
     AppUpdateChecked(Option<AppUpdateInfo>),

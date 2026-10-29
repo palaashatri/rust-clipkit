@@ -9,6 +9,9 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use ytdlp_core::{AppEvent, FfmpegRelease};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 #[derive(Debug, Error)]
 pub enum FfmpegManagerError {
     #[error("Network error: {0}")]
@@ -78,7 +81,6 @@ pub fn detect_ffmpeg_version(path: &Path) -> Option<String> {
 
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
@@ -366,7 +368,7 @@ fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf, FfmpegMa
             continue;
         }
         let entry_name = entry.name().replace('\\', "/");
-        let file_name = entry_name.split('/').last().unwrap_or("");
+        let file_name = entry_name.split('/').next_back().unwrap_or("");
 
         if file_name == ffmpeg_name || file_name == ffprobe_name {
             let dest = dest_dir.join(file_name);
@@ -465,6 +467,7 @@ fn extract_tar(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf, FfmpegMa
 }
 
 /// Simple two-level directory walker (archive always has ≤3 levels deep).
+#[cfg(not(windows))]
 fn walkdir_two_levels(root: &Path) -> Vec<PathBuf> {
     let mut results = Vec::new();
     if let Ok(entries) = std::fs::read_dir(root) {

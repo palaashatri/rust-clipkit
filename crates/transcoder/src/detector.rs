@@ -1,5 +1,8 @@
 use std::path::{Path, PathBuf};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 /// Locates ffmpeg on the system.
 ///
 /// Checks `custom_path` first (user override from settings), then the system PATH.
@@ -21,7 +24,6 @@ pub fn detect_ffmpeg(custom_path: Option<&Path>) -> Option<PathBuf> {
 
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
@@ -40,7 +42,6 @@ fn probe_ffmpeg(path: &Path) -> bool {
 
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 

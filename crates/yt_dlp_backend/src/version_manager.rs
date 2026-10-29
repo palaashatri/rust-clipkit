@@ -9,6 +9,9 @@ use thiserror::Error;
 use tokio::sync::broadcast;
 use ytdlp_core::{AppEvent, YtDlpVersion};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 const CACHE_TTL: Duration = Duration::from_secs(6 * 3600);
 
 type ReleaseCache = Arc<Mutex<Option<(Instant, Vec<YtDlpVersion>)>>>;
@@ -116,7 +119,6 @@ pub fn detect_ytdlp_version(path: &Path) -> Option<String> {
 
     #[cfg(target_os = "windows")]
     {
-        use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
 
