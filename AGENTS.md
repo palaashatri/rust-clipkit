@@ -2,13 +2,16 @@
 
 ClipKit is a native desktop GUI (Rust + [Iced](https://github.com/iced-rs/iced) 0.12, Tokio) for a command-line media download engine (yt-dlp, managed in `crates/yt_dlp_backend`) plus an ffmpeg-based transcoder with HDR/Dolby Vision-aware presets. It targets Windows, macOS and Linux.
 
-## Current state (2026-10-20)
+## Current state
 
-- Builds and runs (`cargo build` succeeds on Linux). There is **1 unit test** in the whole workspace and **no CI on push/PR** — only a tag-triggered release workflow.
-- The last release run (June 2026) failed: both Linux bundle jobs failed in *Build and Bundle (Linux)*, and the macOS Intel job uses the retired `macos-13` runner.
-- `Cargo.lock` is not committed, so builds are not reproducible.
-- The engine updater downloads and runs a binary from GitHub releases **without verifying its checksum**.
-- `cargo clippy` reports 10 warnings (dead code, `map_or` simplifications, a complex type).
+- Builds and runs (`cargo build` succeeds on macOS, Linux, and Windows).
+- `Cargo.lock` is committed for reproducible builds.
+- Push/PR CI workflow is active in `.github/workflows/ci.yml` running `cargo fmt --check`, `clippy -D warnings`, unit tests, and GUI build.
+- 21 unit tests cover `option_map`, progress parsing, engine checksum verification, and `presets`.
+- Engine downloads verify SHA-256 against release `SHA2-256SUMS` before marking binaries executable.
+- `cargo clippy --workspace --all-targets -- -D warnings` passes with 0 warnings.
+- Release workflows repaired (Linux multiarch bundling fixed, macOS runner upgraded to `macos-latest`).
+- UI/UX redesigned with Apple HIG alignment, tactile ceramic / translucent glass palette tokens (`#FF7750`), native macOS menubar with Cocoa activation, and sculpted 3D application icons.
 
 ## Commands
 
@@ -45,12 +48,13 @@ Events flow from Tokio tasks → `tokio::sync::broadcast` → Iced subscription 
 - Parsing of engine progress output and the preset → ffmpeg argument mapping are pure functions; give them unit tests with captured sample output.
 - Don't commit `target/`, downloaded engine binaries or bundles from `dist/`.
 
-## Suggested first tasks
+## Hardening & first tasks status
 
-1. `Cargo.lock` committed; CI workflow added (fmt, clippy -D warnings, test, Linux build).
-2. Fix the clippy warnings, then add tests for `option_map`, progress parsing and `presets`.
-3. Verify engine downloads against the release checksums.
-4. Fix the Linux release job and replace `macos-13` with a supported Intel macOS runner (or drop that target).
+- [x] 1. `Cargo.lock` committed; CI workflow added (fmt, clippy -D warnings, test, Linux build).
+- [x] 2. Fixed clippy warnings, added comprehensive unit tests for `option_map`, progress parsing, and `presets`.
+- [x] 3. Verified engine downloads against release checksums (`SHA2-256SUMS`).
+- [x] 4. Fixed Linux release job bundling and replaced retired `macos-13` runner with `macos-latest`.
+- [x] 5. Redesigned UI/UX around 3D sculpted coral icon and Apple HIG, with native macOS menubar and window icon.
 
 ## Git workflow
 

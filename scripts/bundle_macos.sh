@@ -1,6 +1,6 @@
 #!/bin/bash
-
 # bundle_macos.sh - Create a macOS .app bundle for ClipKit
+set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
@@ -61,24 +61,16 @@ cat > "${APP_NAME}.app/Contents/Info.plist" <<EOF
 EOF
 
 # 5. Handle Icon
-if command -v rsvg-convert &>/dev/null; then
-    echo "[INFO] Generating icon.icns from logo.svg..."
-    mkdir -p "assets/icon.iconset"
-    for size in 16 32 128 256 512; do
-        rsvg-convert -w $size -h $size assets/logo.svg -o assets/icon.iconset/icon_${size}x${size}.png
-        rsvg-convert -w $((size*2)) -h $((size*2)) assets/logo.svg -o assets/icon.iconset/icon_${size}x${size}@2x.png
-    done
-    iconutil -c icns assets/icon.iconset -o assets/icon.icns
-    rm -rf assets/icon.iconset
-fi
-
-if [ -f "assets/icon.icns" ]; then
+if [ -f "assets/brand/icon.icns" ]; then
+    echo "[INFO] Copying brand icon.icns..."
+    mkdir -p "${APP_NAME}.app/Contents/Resources"
+    cp "assets/brand/icon.icns" "${APP_NAME}.app/Contents/Resources/AppIcon.icns"
+elif [ -f "assets/icon.icns" ]; then
     echo "[INFO] Copying icon.icns..."
     mkdir -p "${APP_NAME}.app/Contents/Resources"
     cp "assets/icon.icns" "${APP_NAME}.app/Contents/Resources/AppIcon.icns"
 else
-    echo "[WARN] No assets/icon.icns found. App will use default icon."
-    echo "[TIP] Install 'librsvg' (brew install librsvg) to auto-generate icons from SVG."
+    echo "[WARN] No assets/brand/icon.icns found. App will use default icon."
 fi
 
 # 6. Finalize

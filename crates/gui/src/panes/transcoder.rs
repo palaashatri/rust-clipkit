@@ -246,7 +246,10 @@ impl TranscoderPane {
                         .map(|p| p.to_path_buf())
                         .unwrap_or_else(|| PathBuf::from("."))
                 });
-                let output = base_dir.join(format!("{}_transcoded.{}", stem, ext));
+                let mut output = base_dir.join(format!("{}_transcoded.{}", stem, ext));
+                if output == input {
+                    output = base_dir.join(format!("{}_transcoded_out.{}", stem, ext));
+                }
 
                 // Prune oldest terminal jobs when at capacity.
                 const MAX_JOBS: usize = 200;
@@ -317,7 +320,7 @@ impl TranscoderPane {
                         text("ffmpeg not found")
                             .size(theme::size::FOOTNOTE)
                             .style(iced::theme::Text::Color(theme::color::warning())),
-                        text("Transcoding requires ffmpeg. Go to Settings → Tools to download it.")
+                        text("Transcoding requires ffmpeg. Go to Settings → Engine Management to download or locate it.")
                             .size(theme::size::CAPTION)
                             .style(iced::theme::Text::Color(theme::color::secondary())),
                     ]
@@ -594,7 +597,11 @@ impl TranscoderPane {
                         .width(Length::FillPortion(1)),
                     ]
                     .align_items(Alignment::Center),
-                    Space::with_height(if self.command_preview_open { 10u16 } else { 0u16 }),
+                    Space::with_height(if self.command_preview_open {
+                        10u16
+                    } else {
+                        0u16
+                    }),
                     codec_note,
                 ]
                 .spacing(0),
@@ -630,7 +637,11 @@ impl TranscoderPane {
                 .text_size(theme::size::FOOTNOTE)
                 .padding([10, 14])
                 .width(Length::Fill),
-                Space::with_height(if self.command_preview_open { 10u16 } else { 0u16 }),
+                Space::with_height(if self.command_preview_open {
+                    10u16
+                } else {
+                    0u16
+                }),
                 cmd_preview,
                 Space::with_height(16),
                 advanced_toggle,
@@ -674,8 +685,7 @@ impl TranscoderPane {
             format!("{} items", self.jobs.len())
         };
         let queue_header = row![
-            text("Queue")
-                .size(theme::size::HEADLINE),
+            text("Queue").size(theme::size::HEADLINE),
             text(format!("  ·  {}", t_count_str))
                 .size(theme::size::SUBHEAD)
                 .style(iced::theme::Text::Color(theme::color::secondary())),
@@ -819,20 +829,15 @@ fn transcode_job_row(job: &TranscodeJob) -> Element<'static, TranscoderPaneMessa
         .map(|p| p.name.clone())
         .unwrap_or_else(|| "(preset)".to_string());
 
-    let status_chip = container(
-        text(status_label)
-            .size(theme::size::CAPTION),
-    )
-    .style(theme::chip(chip_kind))
-    .padding([3, 9]);
+    let status_chip = container(text(status_label).size(theme::size::CAPTION))
+        .style(theme::chip(chip_kind))
+        .padding([3, 9]);
 
     container(
         column![
             row![
                 column![
-                    text(title)
-                        .size(theme::size::FOOTNOTE)
-                        .width(Length::Fill),
+                    text(title).size(theme::size::FOOTNOTE).width(Length::Fill),
                     Space::with_height(4),
                     text(preset_label)
                         .size(theme::size::CAPTION)
@@ -842,8 +847,7 @@ fn transcode_job_row(job: &TranscodeJob) -> Element<'static, TranscoderPaneMessa
                 .spacing(0)
                 .width(Length::Fill),
                 Space::with_width(10),
-                column![status_chip, Space::with_height(6), action,]
-                    .align_items(Alignment::End),
+                column![status_chip, Space::with_height(6), action,].align_items(Alignment::End),
             ]
             .align_items(Alignment::Center),
             Space::with_height(8),

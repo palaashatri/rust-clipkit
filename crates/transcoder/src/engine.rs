@@ -1,7 +1,3 @@
-use ytdlp_core::{
-    AppEvent, ContainerFormat, HdrPolicy, Resolution, TranscodePreset, TranscodeProgress,
-    TranscodeResult, VideoCodec, AudioCodec,
-};
 use regex::Regex;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -12,6 +8,10 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::{broadcast, Semaphore};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
+use ytdlp_core::{
+    AppEvent, AudioCodec, ContainerFormat, HdrPolicy, Resolution, TranscodePreset,
+    TranscodeProgress, TranscodeResult, VideoCodec,
+};
 
 static TIME_RE: OnceLock<Regex> = OnceLock::new();
 static FPS_RE: OnceLock<Regex> = OnceLock::new();
@@ -95,7 +95,13 @@ pub fn build_ffmpeg_args(request: &TranscodeRequest) -> Vec<String> {
     let preset = &request.preset;
     let is_audio_only = matches!(
         preset.container,
-        ContainerFormat::Mp3 | ContainerFormat::Flac | ContainerFormat::Aac | ContainerFormat::Ogg | ContainerFormat::Wav | ContainerFormat::Wma | ContainerFormat::M4a
+        ContainerFormat::Mp3
+            | ContainerFormat::Flac
+            | ContainerFormat::Aac
+            | ContainerFormat::Ogg
+            | ContainerFormat::Wav
+            | ContainerFormat::Wma
+            | ContainerFormat::M4a
     );
 
     if is_audio_only {
@@ -241,29 +247,34 @@ pub fn build_ffmpeg_args(request: &TranscodeRequest) -> Vec<String> {
         // Tonemap fallback: zscale is often missing. Using standard filters.
         let hdr_filter = match &preset.hdr_policy {
             HdrPolicy::Preserve => None,
-            HdrPolicy::ToneMapToSdr => Some(
-                "tonemap=hable,format=yuv420p".to_string(),
-            )
+            HdrPolicy::ToneMapToSdr => Some("tonemap=hable,format=yuv420p".to_string()),
         };
 
-        // Build video filter chain
-        let mut filters: Vec<String> = Vec::new();
-        if let Some(s) = scale_filter {
-            filters.push(s.to_string());
-        }
-        if let Some(h) = hdr_filter {
-            filters.push(h);
-        }
-        if !filters.is_empty() {
-            args.extend(["-vf".into(), filters.join(",")]);
+        // Build video filter chain (only when re-encoding; streamcopy cannot use filters)
+        if !matches!(preset.video_codec, VideoCodec::Copy) {
+            let mut filters: Vec<String> = Vec::new();
+            if let Some(s) = scale_filter {
+                filters.push(s.to_string());
+            }
+            if let Some(h) = hdr_filter {
+                filters.push(h);
+            }
+            if !filters.is_empty() {
+                args.extend(["-vf".into(), filters.join(",")]);
+            }
         }
 
         // Preserve HDR color metadata when not tone-mapping
-        if matches!(preset.hdr_policy, HdrPolicy::Preserve) && !matches!(preset.video_codec, VideoCodec::Copy) {
+        if matches!(preset.hdr_policy, HdrPolicy::Preserve)
+            && !matches!(preset.video_codec, VideoCodec::Copy)
+        {
             args.extend([
-                "-color_primaries".into(), "bt2020".into(),
-                "-color_trc".into(), "smpte2084".into(),
-                "-colorspace".into(), "bt2020nc".into(),
+                "-color_primaries".into(),
+                "bt2020".into(),
+                "-color_trc".into(),
+                "smpte2084".into(),
+                "-colorspace".into(),
+                "bt2020nc".into(),
             ]);
         }
 
@@ -305,6 +316,15 @@ async fn run_transcode(
 ) {
     let job_id = request.job_id;
 
+    if request.input == request.output {
+        let _ = event_tx.send(AppEvent::TranscodeFailed {
+            job_id,
+            error: "Input and output file paths cannot be identical; refusing to overwrite source."
+                .to_string(),
+        });
+        return;
+    }
+
     let ffmpeg = match ffmpeg_path {
         Some(p) if p.exists() => p,
         _ => {
@@ -323,16 +343,14 @@ async fn run_transcode(
     let args = build_ffmpeg_args(&request);
 
     let mut cmd = tokio::process::Command::new(&ffmpeg);
-    cmd.args(&args)
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped());
-    
+    cmd.args(&args).stdout(Stdio::null()).stderr(Stdio::piped());
+
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    
+
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -368,7 +386,7 @@ async fn run_transcode(
 
         if line.starts_with("progress=") {
             let now = Instant::now();
-            if last_progress_emit.map_or(true, |t| now.duration_since(t) >= PROGRESS_THROTTLE) {
+            if last_progress_emit.is_none_or(|t| now.duration_since(t) >= PROGRESS_THROTTLE) {
                 let elapsed_secs = current_ms as f32 / 1_000_000.0;
                 let percent = if total_secs > 0.0 {
                     (elapsed_secs / total_secs * 100.0).min(100.0)
@@ -399,7 +417,9 @@ async fn run_transcode(
         Ok(s) if s.success() => {
             let _ = event_tx.send(AppEvent::TranscodeCompleted {
                 job_id,
-                result: TranscodeResult { output_path: request.output.clone() },
+                result: TranscodeResult {
+                    output_path: request.output.clone(),
+                },
             });
         }
         Ok(s) => {
@@ -433,21 +453,157 @@ async fn probe_duration(ffmpeg: &Path, input: &Path) -> Option<f32> {
 
     let mut cmd = tokio::process::Command::new(&ffprobe);
     cmd.args([
-        "-v", "quiet",
-        "-print_format", "json",
+        "-v",
+        "quiet",
+        "-print_format",
+        "json",
         "-show_format",
+        "-i",
         input.to_str()?,
     ]);
-    
+
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    
+
     let output = cmd.output().await.ok()?;
 
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
     let duration_str = json["format"]["duration"].as_str()?;
     duration_str.parse().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use ytdlp_core::{
+        AudioCodec, ContainerFormat, EncodingPreset, HdrPolicy, Resolution, TranscodePreset,
+        VideoCodec,
+    };
+
+    #[test]
+    fn test_build_ffmpeg_args_audio_only() {
+        let preset = TranscodePreset {
+            name: "MP3 Test".to_string(),
+            container: ContainerFormat::Mp3,
+            video_codec: VideoCodec::Copy,
+            audio_codec: AudioCodec::Mp3,
+            resolution: Resolution::Source,
+            hdr_policy: HdrPolicy::ToneMapToSdr,
+            crf: 0,
+            speed: EncodingPreset::Medium,
+            audio_bitrate_kbps: Some(320),
+            use_gpu: false,
+        };
+
+        let req = TranscodeRequest {
+            job_id: Uuid::new_v4(),
+            input: PathBuf::from("/tmp/input.mkv"),
+            output: PathBuf::from("/tmp/output.mp3"),
+            preset,
+        };
+
+        let args = build_ffmpeg_args(&req);
+        assert!(args.contains(&"-y".to_string()));
+        assert!(args.contains(&"-vn".to_string()));
+        let ca_idx = args.iter().position(|a| a == "-c:a").unwrap();
+        assert_eq!(args[ca_idx + 1], "libmp3lame");
+        let ba_idx = args.iter().position(|a| a == "-b:a").unwrap();
+        assert_eq!(args[ba_idx + 1], "320k");
+        assert_eq!(args.last().unwrap(), "/tmp/output.mp3");
+    }
+
+    #[test]
+    fn test_build_ffmpeg_args_video_scaling_and_crf() {
+        let preset = TranscodePreset {
+            name: "MP4 1080p Test".to_string(),
+            container: ContainerFormat::Mp4,
+            video_codec: VideoCodec::H264,
+            audio_codec: AudioCodec::Aac,
+            resolution: Resolution::Res1080p,
+            hdr_policy: HdrPolicy::ToneMapToSdr,
+            crf: 20,
+            speed: EncodingPreset::Fast,
+            audio_bitrate_kbps: Some(192),
+            use_gpu: false,
+        };
+
+        let req = TranscodeRequest {
+            job_id: Uuid::new_v4(),
+            input: PathBuf::from("/tmp/video.mov"),
+            output: PathBuf::from("/tmp/video.mp4"),
+            preset,
+        };
+
+        let args = build_ffmpeg_args(&req);
+        assert!(args.contains(&"-i".to_string()));
+        assert!(args.contains(&"-c:v".to_string()));
+        assert!(args.contains(&"-crf".to_string()));
+        let crf_idx = args.iter().position(|a| a == "-crf").unwrap();
+        assert_eq!(args[crf_idx + 1], "20");
+
+        // Scale filter should be in -vf
+        let vf_idx = args.iter().position(|a| a == "-vf").unwrap();
+        assert!(args[vf_idx + 1].contains("scale=-2:1080"));
+    }
+
+    #[test]
+    fn test_build_ffmpeg_args_copy_codec() {
+        let preset = TranscodePreset {
+            name: "Remux Test".to_string(),
+            container: ContainerFormat::Mkv,
+            video_codec: VideoCodec::Copy,
+            audio_codec: AudioCodec::Copy,
+            resolution: Resolution::Source,
+            hdr_policy: HdrPolicy::Preserve,
+            crf: 0,
+            speed: EncodingPreset::Medium,
+            audio_bitrate_kbps: None,
+            use_gpu: false,
+        };
+
+        let req = TranscodeRequest {
+            job_id: Uuid::new_v4(),
+            input: PathBuf::from("/tmp/input.mp4"),
+            output: PathBuf::from("/tmp/output.mkv"),
+            preset,
+        };
+
+        let args = build_ffmpeg_args(&req);
+        let cv_idx = args.iter().position(|a| a == "-c:v").unwrap();
+        assert_eq!(args[cv_idx + 1], "copy");
+        let ca_idx = args.iter().position(|a| a == "-c:a").unwrap();
+        assert_eq!(args[ca_idx + 1], "copy");
+        assert!(!args.contains(&"-vf".to_string()));
+    }
+
+    #[test]
+    fn test_build_ffmpeg_args_copy_codec_disallows_filters() {
+        let preset = TranscodePreset {
+            name: "Remux Test With Res".to_string(),
+            container: ContainerFormat::Mp4,
+            video_codec: VideoCodec::Copy,
+            audio_codec: AudioCodec::Copy,
+            resolution: Resolution::Res1080p, // Even if 1080p is selected
+            hdr_policy: HdrPolicy::ToneMapToSdr, // Or tonemapping selected
+            crf: 0,
+            speed: EncodingPreset::Medium,
+            audio_bitrate_kbps: None,
+            use_gpu: false,
+        };
+
+        let req = TranscodeRequest {
+            job_id: Uuid::new_v4(),
+            input: PathBuf::from("/tmp/input.mov"),
+            output: PathBuf::from("/tmp/output.mp4"),
+            preset,
+        };
+
+        let args = build_ffmpeg_args(&req);
+        // Must never include -vf when video_codec is Copy to prevent FFmpeg error 234
+        assert!(!args.contains(&"-vf".to_string()));
+    }
 }

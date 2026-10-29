@@ -1,12 +1,13 @@
 use chrono::{DateTime, Utc};
-use ytdlp_core::{AppEvent, FfmpegRelease};
 use reqwest::Client;
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
 use tokio::sync::broadcast;
+use ytdlp_core::{AppEvent, FfmpegRelease};
 
 #[derive(Debug, Error)]
 pub enum FfmpegManagerError {
@@ -20,6 +21,14 @@ pub enum FfmpegManagerError {
     UnsupportedPlatform,
     #[error("ffmpeg binary not found in archive")]
     BinaryNotFound,
+    #[error("Checksum mismatch for {filename}: expected {expected}, actual {actual}")]
+    ChecksumMismatch {
+        filename: String,
+        expected: String,
+        actual: String,
+    },
+    #[error("Checksum for {filename} not found in checksums.sha256")]
+    ChecksumNotFound { filename: String },
 }
 
 #[derive(Deserialize)]
@@ -47,24 +56,32 @@ fn platform_asset_name() -> Option<&'static str> {
 }
 
 fn ffmpeg_bin_name() -> &'static str {
-    if cfg!(target_os = "windows") { "ffmpeg.exe" } else { "ffmpeg" }
+    if cfg!(target_os = "windows") {
+        "ffmpeg.exe"
+    } else {
+        "ffmpeg"
+    }
 }
 
 fn ffprobe_bin_name() -> &'static str {
-    if cfg!(target_os = "windows") { "ffprobe.exe" } else { "ffprobe" }
+    if cfg!(target_os = "windows") {
+        "ffprobe.exe"
+    } else {
+        "ffprobe"
+    }
 }
 
 /// Runs `ffmpeg -version` and extracts the version token (e.g. "7.0.2").
 pub fn detect_ffmpeg_version(path: &Path) -> Option<String> {
     let mut cmd = std::process::Command::new(path);
     cmd.arg("-version");
-    
+
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    
+
     let out = cmd.output().ok()?;
     if !out.status.success() {
         return None;
@@ -80,6 +97,44 @@ pub fn auto_download_supported() -> bool {
     platform_asset_name().is_some()
 }
 
+/// Computes the lowercase hex SHA-256 hash of a file on disk.
+pub fn compute_file_sha256(path: &Path) -> std::io::Result<String> {
+    use std::io::Read;
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 64 * 1024];
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// Parses the expected SHA-256 checksum for `target_filename` from `checksums.sha256` text.
+pub fn parse_checksums(content: &str, target_filename: &str) -> Option<String> {
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        if parts.len() >= 2 {
+            let hash = parts[0];
+            let filename = parts[1].trim_start_matches('*').trim_start_matches("./");
+            if filename == target_filename
+                && hash.len() == 64
+                && hash.chars().all(|c| c.is_ascii_hexdigit())
+            {
+                return Some(hash.to_lowercase());
+            }
+        }
+    }
+    None
+}
+
 /// Manages the ffmpeg binary: fetches the latest build from yt-dlp/FFmpeg-Builds,
 /// downloads, and extracts to the configured bin directory.
 pub struct FfmpegManager {
@@ -91,16 +146,26 @@ pub struct FfmpegManager {
 impl FfmpegManager {
     pub fn new(bin_dir: PathBuf, event_tx: Arc<broadcast::Sender<AppEvent>>) -> Self {
         let client = Client::builder()
+            .timeout(Duration::from_secs(300))
+            .connect_timeout(Duration::from_secs(10))
             .user_agent("clipkit/0.1")
             .build()
             .expect("Failed to build HTTP client");
-        Self { bin_dir, event_tx, client }
+        Self {
+            bin_dir,
+            event_tx,
+            client,
+        }
     }
 
     /// Path to the managed ffmpeg binary if it has been downloaded.
     pub fn managed_path(&self) -> Option<PathBuf> {
         let p = self.bin_dir.join(ffmpeg_bin_name());
-        if p.exists() { Some(p) } else { None }
+        if p.exists() {
+            Some(p)
+        } else {
+            None
+        }
     }
 
     /// Fetches the latest FFmpeg release info from GitHub.
@@ -135,38 +200,97 @@ impl FfmpegManager {
         match self.do_download_latest().await {
             Ok(path) => {
                 let version = detect_ffmpeg_version(&path).unwrap_or_else(|| "unknown".to_string());
-                let _ = self.event_tx.send(AppEvent::FfmpegDownloaded { path, version });
-            }
-            Err(e) => {
                 let _ = self
                     .event_tx
-                    .send(AppEvent::FfmpegDownloadFailed { error: e.to_string() });
+                    .send(AppEvent::FfmpegDownloaded { path, version });
+            }
+            Err(e) => {
+                let _ = self.event_tx.send(AppEvent::FfmpegDownloadFailed {
+                    error: e.to_string(),
+                });
             }
         }
     }
 
     async fn do_download_latest(&self) -> Result<PathBuf, FfmpegManagerError> {
-        let release = self.fetch_latest_release().await?;
+        let url = "https://api.github.com/repos/yt-dlp/FFmpeg-Builds/releases/latest";
+        let gh: GhRelease = self
+            .client
+            .get(url)
+            .header("Accept", "application/vnd.github+json")
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+
         let archive_name = platform_asset_name().ok_or(FfmpegManagerError::UnsupportedPlatform)?;
+        let archive_asset = gh
+            .assets
+            .iter()
+            .find(|a| a.name == archive_name)
+            .ok_or(FfmpegManagerError::BinaryNotFound)?;
+
+        let checksums_asset = gh
+            .assets
+            .iter()
+            .find(|a| a.name == "checksums.sha256")
+            .ok_or_else(|| FfmpegManagerError::ChecksumNotFound {
+                filename: "checksums.sha256".to_string(),
+            })?;
+
+        // 1. Fetch checksums text and parse expected hash
+        let checksums_text = self
+            .client
+            .get(&checksums_asset.browser_download_url)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+
+        let expected_sha256 = parse_checksums(&checksums_text, archive_name).ok_or_else(|| {
+            FfmpegManagerError::ChecksumNotFound {
+                filename: archive_name.to_string(),
+            }
+        })?;
 
         tokio::fs::create_dir_all(&self.bin_dir).await?;
 
         let archive_path = self.bin_dir.join(archive_name);
-        self.download_archive(&release.download_url, &archive_path).await?;
+        let temp_archive = self.bin_dir.join(format!("{}.download", archive_name));
+        if temp_archive.exists() {
+            let _ = tokio::fs::remove_file(&temp_archive).await;
+        }
 
+        // 2. Download archive to temp file
+        self.download_archive(&archive_asset.browser_download_url, &temp_archive)
+            .await?;
+
+        // 3. Verify SHA-256 hash before extraction
+        let actual_sha256 = compute_file_sha256(&temp_archive)?;
+        if actual_sha256.to_lowercase() != expected_sha256.to_lowercase() {
+            let _ = tokio::fs::remove_file(&temp_archive).await;
+            return Err(FfmpegManagerError::ChecksumMismatch {
+                filename: archive_name.to_string(),
+                expected: expected_sha256,
+                actual: actual_sha256,
+            });
+        }
+
+        // 4. Atomically rename
+        tokio::fs::rename(&temp_archive, &archive_path).await?;
+
+        // 5. Extract archive
         let ffmpeg_path = self.extract_archive(&archive_path).await?;
 
-        // Remove archive after extraction
+        // 6. Clean up archive
         tokio::fs::remove_file(&archive_path).await.ok();
 
         Ok(ffmpeg_path)
     }
 
-    async fn download_archive(
-        &self,
-        url: &str,
-        dest: &Path,
-    ) -> Result<(), FfmpegManagerError> {
+    async fn download_archive(&self, url: &str, dest: &Path) -> Result<(), FfmpegManagerError> {
         use tokio::io::AsyncWriteExt;
 
         let mut resp = self.client.get(url).send().await?.error_for_status()?;
@@ -185,7 +309,9 @@ impl FfmpegManager {
                 let now = Instant::now();
                 if now.duration_since(last_emit) >= throttle {
                     let percent = (downloaded as f32 / total as f32) * 100.0;
-                    let _ = self.event_tx.send(AppEvent::FfmpegDownloadProgress { percent });
+                    let _ = self
+                        .event_tx
+                        .send(AppEvent::FfmpegDownloadProgress { percent });
                     last_emit = now;
                 }
             }
@@ -198,11 +324,9 @@ impl FfmpegManager {
         let bin_dir = self.bin_dir.clone();
         let archive_path = archive_path.to_path_buf();
 
-        tokio::task::spawn_blocking(move || {
-            extract_archive_sync(&archive_path, &bin_dir)
-        })
-        .await
-        .map_err(|e| FfmpegManagerError::Extraction(e.to_string()))?
+        tokio::task::spawn_blocking(move || extract_archive_sync(&archive_path, &bin_dir))
+            .await
+            .map_err(|e| FfmpegManagerError::Extraction(e.to_string()))?
     }
 }
 
@@ -282,7 +406,9 @@ fn extract_tar(archive_path: &Path, dest_dir: &Path) -> Result<PathBuf, FfmpegMa
         .status()?;
 
     if !status.success() {
-        return Err(FfmpegManagerError::Extraction("tar -xJf failed".to_string()));
+        return Err(FfmpegManagerError::Extraction(
+            "tar -xJf failed".to_string(),
+        ));
     }
 
     // Walk tmp_dir looking for the ffmpeg binary inside a bin/ subdirectory.
@@ -367,4 +493,30 @@ fn walkdir_two_levels(root: &Path) -> Vec<PathBuf> {
         }
     }
     results
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SAMPLE_CHECKSUMS: &str = r#"
+0862210a5e0d32b3378403bfa479caf53bac294630ee2746904dd8828211db65  ffmpeg-master-latest-linux64-gpl.tar.xz
+64bd76725aaf89def5d78ec79ea42b713324bde7a4634e115cd958f0e8ca02d2  ffmpeg-master-latest-win64-gpl.zip
+"#;
+
+    #[test]
+    fn test_parse_checksums_linux_and_win() {
+        assert_eq!(
+            parse_checksums(SAMPLE_CHECKSUMS, "ffmpeg-master-latest-linux64-gpl.tar.xz").as_deref(),
+            Some("0862210a5e0d32b3378403bfa479caf53bac294630ee2746904dd8828211db65")
+        );
+        assert_eq!(
+            parse_checksums(SAMPLE_CHECKSUMS, "ffmpeg-master-latest-win64-gpl.zip").as_deref(),
+            Some("64bd76725aaf89def5d78ec79ea42b713324bde7a4634e115cd958f0e8ca02d2")
+        );
+        assert_eq!(
+            parse_checksums(SAMPLE_CHECKSUMS, "nonexistent-archive.zip"),
+            None
+        );
+    }
 }

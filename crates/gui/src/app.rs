@@ -6,7 +6,9 @@ use crate::panes::{
 };
 use crate::theme;
 use iced::{
-    widget::{button, column, container, horizontal_rule, row, svg, text, vertical_rule, Space},
+    widget::{
+        button, column, container, horizontal_rule, image, row, svg, text, vertical_rule, Space,
+    },
     Alignment, Application, Command, Element, Length, Subscription, Theme,
 };
 use std::any::TypeId;
@@ -37,8 +39,6 @@ pub enum Message {
     FfmpegDetected(Option<PathBuf>),
     AppUpdateChecked(Option<AppUpdateInfo>),
     OpenReleaseUrl(String),
-    #[cfg(target_os = "macos")]
-    InitMacosMenu,
 }
 
 // ── App state ─────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ impl Application for App {
         );
 
         #[cfg(target_os = "macos")]
-        let menu_init_cmd = Command::perform(async { () }, |_| Message::InitMacosMenu);
+        let menu = init_macos_menu();
 
         let app = Self {
             active_pane: Pane::Download,
@@ -101,13 +101,9 @@ impl Application for App {
             settings_pane,
             update_available: None,
             #[cfg(target_os = "macos")]
-            _menu: None,
+            _menu: Some(menu),
         };
 
-        #[cfg(target_os = "macos")]
-        return (app, Command::batch([detect_cmd, update_cmd, menu_init_cmd]));
-
-        #[cfg(not(target_os = "macos"))]
         (app, Command::batch([detect_cmd, update_cmd]))
     }
 
@@ -157,7 +153,6 @@ impl Application for App {
             |mut output| async move {
                 let receiver = muda::MenuEvent::receiver();
                 loop {
-                    // Poll for menu events more frequently
                     while let Ok(event) = receiver.try_recv() {
                         use iced::futures::SinkExt;
                         let _ = output.send(Message::MenuEvent(event.id.0.clone())).await;
@@ -239,7 +234,7 @@ impl Application for App {
                             )
                         } else {
                             // Auto-download ffmpeg in background
-                            Command::perform(async { () }, |_| {
+                            Command::perform(async {}, |_| {
                                 Message::Settings(SettingsPaneMessage::Manager(
                                     ManagerPaneMessage::AutoDownloadFfmpeg,
                                 ))
@@ -265,36 +260,43 @@ impl Application for App {
                 cmd.map(Message::Settings)
             }
 
-            Message::MenuEvent(id) => {
-                match id.as_str() {
-                    "menu-item-about" => {
-                        self.active_pane = Pane::Settings;
-                        let _ = self.settings_pane.update(
-                            SettingsPaneMessage::TabSelected(
-                                crate::panes::settings::SettingsTab::About,
-                            ),
-                            &mut self.config,
-                        );
-                    }
-                    "menu-pane-download" | "menu-nav-download" => {
-                        self.active_pane = Pane::Download;
-                    }
-                    "menu-pane-transcode" => {
-                        self.active_pane = Pane::Transcoder;
-                    }
-                    "menu-pane-settings" => {
-                        self.active_pane = Pane::Settings;
-                    }
-                    _ => {}
+            Message::MenuEvent(id) => match id.as_str() {
+                "menu-item-about" => {
+                    self.active_pane = Pane::Settings;
+                    let _ = self.settings_pane.update(
+                        SettingsPaneMessage::TabSelected(
+                            crate::panes::settings::SettingsTab::About,
+                        ),
+                        &mut self.config,
+                    );
+                    Command::none()
                 }
-                Command::none()
-            }
-
-            #[cfg(target_os = "macos")]
-            Message::InitMacosMenu => {
-                self._menu = Some(init_macos_menu());
-                Command::none()
-            }
+                "menu-pane-download" | "menu-nav-download" => {
+                    self.active_pane = Pane::Download;
+                    Command::none()
+                }
+                "menu-pane-transcode" => {
+                    self.active_pane = Pane::Transcoder;
+                    Command::none()
+                }
+                "menu-pane-settings" => {
+                    self.active_pane = Pane::Settings;
+                    Command::none()
+                }
+                "menu-help-repo" => {
+                    let _ = open::that("https://github.com/palaashatri/rust-clipkit");
+                    Command::none()
+                }
+                "menu-help-issues" => {
+                    let _ = open::that("https://github.com/palaashatri/rust-clipkit/issues");
+                    Command::none()
+                }
+                "menu-help-check-updates" => Command::perform(
+                    yt_dlp_backend::check_for_app_update(),
+                    Message::AppUpdateChecked,
+                ),
+                _ => Command::none(),
+            },
 
             Message::AppEvent(ref event) => {
                 // Handle app-level events before routing to panes
@@ -330,7 +332,7 @@ impl Application for App {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        const SIDEBAR_WIDTH: u16 = 268;
+        const SIDEBAR_WIDTH: u16 = 264;
 
         let is_dark = matches!(self.theme(), Theme::Dark);
 
@@ -348,7 +350,7 @@ impl Application for App {
         let content = container(content_pane)
             .width(Length::Fill)
             .height(Length::Fill)
-            .padding([32, 40, 24, 40]);
+            .padding([28, 36, 24, 36]);
 
         let top_accent = container(Space::with_height(2))
             .width(Length::Fill)
@@ -373,19 +375,20 @@ impl Application for App {
 }
 
 impl App {
-
     fn sidebar_nav(&self) -> Element<'_, Message> {
         let nav_item =
             |icon: theme::NavIcon, label: &'static str, pane: Pane| -> Element<'_, Message> {
                 let active = self.active_pane == pane;
 
+                let icon_widget = svg(theme::nav_icon(icon, active)).width(18).height(18);
+
                 let content = row![
-                    svg(theme::nav_icon(icon, active)).width(20).height(20),
-                    Space::with_width(14),
+                    icon_widget,
+                    Space::with_width(12),
                     text(label)
                         .size(theme::size::SUBHEAD)
                         .style(if active {
-                            iced::theme::Text::Color(iced::Color::WHITE)
+                            iced::theme::Text::Color(theme::color::accent())
                         } else {
                             iced::theme::Text::Color(theme::color::secondary())
                         })
@@ -395,24 +398,35 @@ impl App {
 
                 button(content)
                     .width(Length::Fill)
-                    .padding([14, 16])
+                    .padding([10, 14])
                     .style(theme::button::nav(active))
                     .on_press(Message::PaneSelected(pane))
                     .into()
             };
 
-        let logo = container(
+        // Window controls clearance on macOS: traffic lights reside at the top left.
+        // Leaving 52px top padding keeps the logo completely clear and comfortably placed below the controls.
+        #[cfg(target_os = "macos")]
+        const TOP_PADDING: u16 = 52;
+        #[cfg(not(target_os = "macos"))]
+        const TOP_PADDING: u16 = 20;
+
+        let brand_header = container(
             row![
-                svg(theme::brand_mark_svg()).width(34).height(34),
+                image(theme::brand_icon_handle()).width(36).height(36),
                 Space::with_width(12),
-                text("clipkit")
-                    .size(22)
-                    .style(iced::theme::Text::Default),
+                column![
+                    text("ClipKit").size(19).style(iced::theme::Text::Default),
+                    text("Media Toolkit")
+                        .size(11)
+                        .style(iced::theme::Text::Color(theme::color::secondary())),
+                ]
+                .spacing(1),
             ]
             .spacing(0)
             .align_items(Alignment::Center),
         )
-        .padding([26, 20, 22, 20]);
+        .padding([TOP_PADDING, 18, 18, 18]);
 
         // Update-available badge
         let update_badge: Element<Message> = if let Some(info) = &self.update_available {
@@ -432,18 +446,62 @@ impl App {
                 )
                 .on_press(Message::OpenReleaseUrl(url))
                 .style(theme::button::ghost())
-                .padding([6, 14]),
+                .padding([6, 12]),
             )
             .into()
         } else {
             Space::with_height(0).into()
         };
 
+        // Runtime status badge (indicates active engine)
+        let engine_status_str = match &self.config.active_ytdlp_version {
+            Some(v) => format!("yt-dlp {}", v),
+            None => {
+                if self.config.use_system_ytdlp {
+                    "System yt-dlp".to_string()
+                } else {
+                    "yt-dlp ready".to_string()
+                }
+            }
+        };
+
+        let engine_pill = container(
+            row![
+                container(Space::with_width(6).height(6)).style(|_t: &iced::Theme| {
+                    container::Appearance {
+                        background: Some(iced::Background::Color(theme::color::success())),
+                        border: iced::Border {
+                            radius: 3.0.into(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    }
+                }),
+                Space::with_width(8),
+                text(engine_status_str)
+                    .size(11)
+                    .style(iced::theme::Text::Color(theme::color::secondary())),
+            ]
+            .align_items(Alignment::Center),
+        )
+        .padding([4, 10])
+        .style(|_t: &iced::Theme| container::Appearance {
+            background: Some(iced::Background::Color(iced::Color::from_rgba(
+                0.0, 0.0, 0.0, 0.15,
+            ))),
+            border: iced::Border {
+                radius: 6.0.into(),
+                width: 0.5,
+                color: iced::Color::from_rgba(1.0, 1.0, 1.0, 0.05),
+            },
+            ..Default::default()
+        });
+
         column![
-            logo,
+            brand_header,
             container(
                 column![
-                    nav_item(theme::NavIcon::Download, "Download", Pane::Download),
+                    nav_item(theme::NavIcon::Download, "Downloads", Pane::Download),
                     Space::with_height(4),
                     nav_item(theme::NavIcon::Transcoder, "Transcoder", Pane::Transcoder),
                 ]
@@ -451,18 +509,24 @@ impl App {
             )
             .padding([0, 12]),
             Space::with_height(Length::Fill),
-            update_badge,
+            container(column![update_badge, Space::with_height(6), engine_pill].spacing(0))
+                .padding([0, 14]),
+            Space::with_height(10),
             container(horizontal_rule(1).style(theme::divider))
                 .width(Length::Fill)
-                .padding([0, 20, 12, 20]),
-            container(nav_item(theme::NavIcon::Settings, "Settings", Pane::Settings))
-                .padding([0, 12]),
+                .padding([0, 16, 10, 16]),
+            container(nav_item(
+                theme::NavIcon::Settings,
+                "Settings",
+                Pane::Settings
+            ))
+            .padding([0, 12]),
             container(
                 text(concat!("v", env!("CARGO_PKG_VERSION")))
-                    .size(theme::size::CAPTION)
+                    .size(11)
                     .style(iced::theme::Text::Color(theme::color::tertiary())),
             )
-            .padding([10, 20, 16, 20]),
+            .padding([8, 18, 14, 18]),
         ]
         .width(Length::Fill)
         .height(Length::Fill)
@@ -472,19 +536,47 @@ impl App {
 }
 
 #[cfg(target_os = "macos")]
+#[allow(unexpected_cfgs)]
 pub fn init_macos_menu() -> muda::Menu {
-    use muda::{Menu, MenuId, MenuItem, PredefinedMenuItem, Submenu};
+    use muda::{AboutMetadata, Menu, MenuId, MenuItem, PredefinedMenuItem, Submenu};
+
+    // Ensure NSApp activation policy is Regular and app is active
+    unsafe {
+        use objc::{class, msg_send, sel, sel_impl};
+        let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
+        if !app.is_null() {
+            let _: () = msg_send![app, setActivationPolicy: 0isize]; // NSApplicationActivationPolicyRegular = 0
+            let _: () = msg_send![app, activateIgnoringOtherApps: true];
+        }
+    }
 
     let menu = Menu::new();
 
-    // App Menu
+    // App Menu ("ClipKit")
     let app_menu = Submenu::new("ClipKit", true);
     let _ = app_menu.append_items(&[
+        &PredefinedMenuItem::about(
+            None,
+            Some(AboutMetadata {
+                name: Some("ClipKit".into()),
+                version: Some(env!("CARGO_PKG_VERSION").into()),
+                authors: Some(vec!["ClipKit Contributors".into()]),
+                comments: Some("Native desktop media download & transcode engine".into()),
+                ..Default::default()
+            }),
+        ),
         &MenuItem::with_id(
-            MenuId::new("menu-item-about"),
-            "ClipKit Info...",
+            MenuId::new("menu-help-check-updates"),
+            "Check for Updates…",
             true,
             None,
+        ),
+        &PredefinedMenuItem::separator(),
+        &MenuItem::with_id(
+            MenuId::new("menu-pane-settings"),
+            "Settings…",
+            true,
+            "CmdOrCtrl+,".parse().ok(),
         ),
         &PredefinedMenuItem::separator(),
         &PredefinedMenuItem::services(None),
@@ -499,7 +591,13 @@ pub fn init_macos_menu() -> muda::Menu {
     // File Menu
     let file_menu = Submenu::new("File", true);
     let _ = file_menu.append_items(&[
-        &MenuItem::with_id(MenuId::new("menu-nav-download"), "New Download", true, None),
+        &MenuItem::with_id(
+            MenuId::new("menu-nav-download"),
+            "New Download",
+            true,
+            "CmdOrCtrl+N".parse().ok(),
+        ),
+        &PredefinedMenuItem::separator(),
         &PredefinedMenuItem::close_window(None),
     ]);
 
@@ -515,26 +613,26 @@ pub fn init_macos_menu() -> muda::Menu {
         &PredefinedMenuItem::select_all(None),
     ]);
 
-    // Navigation Menu (Custom)
-    let nav_menu = Submenu::new("Navigation", true);
-    let _ = nav_menu.append_items(&[
+    // View / Navigation Menu
+    let view_menu = Submenu::new("View", true);
+    let _ = view_menu.append_items(&[
         &MenuItem::with_id(
             MenuId::new("menu-pane-download"),
-            "Download Pane",
+            "Downloads",
             true,
-            None,
+            "CmdOrCtrl+1".parse().ok(),
         ),
         &MenuItem::with_id(
             MenuId::new("menu-pane-transcode"),
-            "Transcoder Pane",
+            "Transcoder",
             true,
-            None,
+            "CmdOrCtrl+2".parse().ok(),
         ),
         &MenuItem::with_id(
             MenuId::new("menu-pane-settings"),
-            "Settings Pane",
+            "Settings",
             true,
-            None,
+            "CmdOrCtrl+3".parse().ok(),
         ),
     ]);
 
@@ -542,11 +640,37 @@ pub fn init_macos_menu() -> muda::Menu {
     let window_menu = Submenu::new("Window", true);
     let _ = window_menu.append_items(&[
         &PredefinedMenuItem::minimize(None),
+        &PredefinedMenuItem::maximize(None),
         &PredefinedMenuItem::separator(),
         &PredefinedMenuItem::bring_all_to_front(None),
     ]);
 
-    let _ = menu.append_items(&[&app_menu, &file_menu, &edit_menu, &nav_menu, &window_menu]);
+    // Help Menu
+    let help_menu = Submenu::new("Help", true);
+    let _ = help_menu.append_items(&[
+        &MenuItem::with_id(
+            MenuId::new("menu-help-repo"),
+            "ClipKit on GitHub",
+            true,
+            None,
+        ),
+        &MenuItem::with_id(
+            MenuId::new("menu-help-issues"),
+            "Report an Issue…",
+            true,
+            None,
+        ),
+    ]);
+
+    let _ = menu.append_items(&[
+        &app_menu,
+        &file_menu,
+        &edit_menu,
+        &view_menu,
+        &window_menu,
+        &help_menu,
+    ]);
+
     menu.init_for_nsapp();
     menu
 }

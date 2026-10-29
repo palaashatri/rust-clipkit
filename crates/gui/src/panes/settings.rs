@@ -95,7 +95,11 @@ impl SettingsPane {
             SettingsPaneMessage::DownloadDirChanged(s) => self.download_dir = s,
             SettingsPaneMessage::MaxDownloadsChanged(s) => self.max_downloads = s,
             SettingsPaneMessage::MaxTranscodesChanged(s) => self.max_transcodes = s,
-            SettingsPaneMessage::ThemeChanged(t) => self.theme = t,
+            SettingsPaneMessage::ThemeChanged(t) => {
+                self.theme = t.clone();
+                config.theme = t;
+                return (Command::none(), Some(config.clone()));
+            }
             SettingsPaneMessage::UseGpuToggled(b) => self.use_gpu = b,
 
             SettingsPaneMessage::Manager(msg) => {
@@ -426,26 +430,28 @@ impl SettingsPane {
     fn view_about(&self) -> Element<'_, SettingsPaneMessage> {
         column![
             row![
-                iced::widget::svg(theme::brand_mark_svg()).width(48).height(48),
-                Space::with_width(14),
+                iced::widget::image(theme::brand_icon_handle()).width(64).height(64),
+                Space::with_width(18),
                 column![
-                    text("ClipKit").size(theme::size::TITLE),
+                    text("ClipKit").size(theme::size::LARGE_TITLE),
+                    Space::with_height(2),
                     text(format!("Version {}", env!("CARGO_PKG_VERSION")))
                         .size(theme::size::FOOTNOTE)
-                        .style(iced::theme::Text::Color(theme::color::tertiary())),
+                        .style(iced::theme::Text::Color(theme::color::accent())),
                 ]
-                .spacing(2),
+                .spacing(0),
             ]
             .align_items(Alignment::Center),
             Space::with_height(20),
-            text("A high-performance, native GUI wrapper for media downloaders and FFmpeg.")
+            text("A high-performance, native GUI media toolkit for downloads and FFmpeg transcoding.")
                 .size(theme::size::BODY),
-            Space::with_height(8),
-            text("Built with Rust and Iced.")
+            Space::with_height(6),
+            text("Crafted with Rust and Iced following Apple Human Interface Guidelines.")
                 .size(theme::size::FOOTNOTE)
                 .style(iced::theme::Text::Color(theme::color::tertiary())),
-            Space::with_height(28),
+            Space::with_height(24),
             text("MIT License").size(theme::size::HEADLINE),
+            Space::with_height(2),
             text("Copyright (c) 2026 Palaash Atri")
                 .size(theme::size::CAPTION)
                 .style(iced::theme::Text::Color(theme::color::tertiary())),
@@ -456,7 +462,7 @@ impl SettingsPane {
                         .size(11)
                         .style(iced::theme::Text::Color(theme::color::secondary()))
                 )
-                .height(220),
+                .height(200),
             )
             .style(theme::code_block)
             .padding(14)
@@ -485,15 +491,10 @@ fn form_row<'a>(
     label: &'a str,
     content: Element<'a, SettingsPaneMessage>,
 ) -> Element<'a, SettingsPaneMessage> {
-    row![
-        text(label)
-            .size(theme::size::FOOTNOTE)
-            .width(180),
-        content,
-    ]
-    .spacing(12)
-    .align_items(Alignment::Center)
-    .into()
+    row![text(label).size(theme::size::FOOTNOTE).width(180), content,]
+        .spacing(12)
+        .align_items(Alignment::Center)
+        .into()
 }
 
 /// A named section with an uppercase header label and a thin underline divider.

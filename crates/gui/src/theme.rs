@@ -16,27 +16,27 @@ pub mod size {
     pub const CAPTION: u16 = 12;
 }
 
-/// Semantic color palette.
+/// Semantic color palette — synchronized with `assets/brand/palette.json`.
 pub mod color {
     use iced::Color;
 
-    /// Brand pink — used for the logo, top accent line, and all primary UI.
+    /// Brand coral — synchronized with `assets/brand/palette.json` (#FF7750).
     pub fn accent() -> Color {
-        Color::from_rgb8(218, 83, 126)
+        Color::from_rgb8(255, 119, 80)
     }
     pub fn accent_hover() -> Color {
-        Color::from_rgb8(226, 104, 145)
+        Color::from_rgb8(255, 140, 105)
     }
     pub fn accent_soft() -> Color {
-        Color::from_rgba(0.855, 0.325, 0.494, 0.12)
+        Color::from_rgba(1.0, 0.467, 0.314, 0.12)
     }
     pub fn accent_ring() -> Color {
-        Color::from_rgba(0.855, 0.325, 0.494, 0.50)
+        Color::from_rgba(1.0, 0.467, 0.314, 0.40)
     }
     pub fn accent_glow() -> Color {
-        Color::from_rgba(0.855, 0.325, 0.494, 0.30)
+        Color::from_rgba(1.0, 0.467, 0.314, 0.25)
     }
-    /// Same pink — alias kept for backwards compatibility with existing call sites.
+    /// Brand alias kept for backwards compatibility with existing call sites.
     #[allow(dead_code)]
     pub fn brand() -> Color {
         accent()
@@ -51,10 +51,10 @@ pub mod color {
         Color::from_rgb8(239, 93, 101)
     }
     pub fn secondary() -> Color {
-        Color::from_rgb8(91, 101, 119)
+        Color::from_rgb8(148, 163, 184)
     }
     pub fn tertiary() -> Color {
-        Color::from_rgb8(139, 149, 166)
+        Color::from_rgb8(100, 116, 139)
     }
 }
 
@@ -66,31 +66,31 @@ fn surface(theme: &iced::Theme) -> Color {
     if is_light(theme) {
         Color::from_rgb8(255, 255, 255)
     } else {
-        Color::from_rgb8(26, 29, 36)
+        Color::from_rgb8(22, 31, 44)
     }
 }
 
 fn surface_raised(theme: &iced::Theme) -> Color {
     if is_light(theme) {
-        Color::from_rgb8(247, 248, 250)
+        Color::from_rgb8(241, 245, 249)
     } else {
-        Color::from_rgb8(35, 40, 49)
+        Color::from_rgb8(30, 41, 59)
     }
 }
 
 fn text_color(theme: &iced::Theme) -> Color {
     if is_light(theme) {
-        Color::from_rgb8(31, 41, 55)
+        Color::from_rgb8(15, 23, 42)
     } else {
-        Color::from_rgb8(236, 238, 242)
+        Color::from_rgb8(244, 247, 252)
     }
 }
 
 fn subtle_border(theme: &iced::Theme) -> Color {
     if is_light(theme) {
-        Color::from_rgba(0.059, 0.090, 0.165, 0.07)
+        Color::from_rgba(0.059, 0.090, 0.165, 0.08)
     } else {
-        Color::from_rgba(1.0, 1.0, 1.0, 0.06)
+        Color::from_rgba(1.0, 1.0, 1.0, 0.08)
     }
 }
 
@@ -99,10 +99,10 @@ fn soft_shadow(theme: &iced::Theme) -> Shadow {
         color: if is_light(theme) {
             Color::from_rgba(0.059, 0.090, 0.165, 0.06)
         } else {
-            Color::from_rgba(0.0, 0.0, 0.0, 0.22)
+            Color::from_rgba(0.0, 0.0, 0.0, 0.28)
         },
-        offset: Vector::new(0.0, 8.0),
-        blur_radius: 24.0,
+        offset: Vector::new(0.0, 6.0),
+        blur_radius: 20.0,
     }
 }
 
@@ -111,14 +111,14 @@ fn strong_shadow(theme: &iced::Theme) -> Shadow {
         color: if is_light(theme) {
             Color::from_rgba(0.059, 0.090, 0.165, 0.10)
         } else {
-            Color::from_rgba(0.0, 0.0, 0.0, 0.32)
+            Color::from_rgba(0.0, 0.0, 0.0, 0.38)
         },
-        offset: Vector::new(0.0, 12.0),
-        blur_radius: 30.0,
+        offset: Vector::new(0.0, 10.0),
+        blur_radius: 28.0,
     }
 }
 
-/// Standard content card. Lighter border, softer shadow — less boxy.
+/// Standard content card. Apple HIG styled with delicate borders and rounded corners.
 pub fn card(theme: &iced::Theme) -> container::Appearance {
     container::Appearance {
         background: Some(Background::Color(surface(theme))),
@@ -146,18 +146,18 @@ pub fn elevated(theme: &iced::Theme) -> container::Appearance {
     }
 }
 
-/// Tinted panel — soft accent background for collapsible sections (less boxy).
+/// Tinted panel — soft coral background wash for highlighted sections.
 pub fn tinted_panel(theme: &iced::Theme) -> container::Appearance {
     container::Appearance {
         background: Some(Background::Color(if is_light(theme) {
-            Color::from_rgba(0.855, 0.325, 0.494, 0.04)
+            Color::from_rgba(1.0, 0.467, 0.314, 0.06)
         } else {
-            Color::from_rgba(0.855, 0.325, 0.494, 0.08)
+            Color::from_rgba(1.0, 0.467, 0.314, 0.09)
         })),
         border: Border {
             radius: 12.0.into(),
-            width: 0.0,
-            color: Color::TRANSPARENT,
+            width: 0.5,
+            color: Color::from_rgba(1.0, 0.467, 0.314, 0.18),
         },
         text_color: None,
         shadow: Shadow::default(),
@@ -173,6 +173,7 @@ pub fn empty_state(_theme: &iced::Theme) -> container::Appearance {
     }
 }
 
+#[allow(dead_code)]
 pub fn topbar(theme: &iced::Theme) -> container::Appearance {
     container::Appearance {
         background: Some(Background::Color(if is_light(theme) {
@@ -220,12 +221,10 @@ pub enum NavIcon {
     Download,
     Transcoder,
     Settings,
-    Back,
-    Forward,
 }
 
 pub fn nav_icon(icon: NavIcon, active: bool) -> iced_svg::Handle {
-    let color = if active { "#ffffff" } else { "#8b95a6" };
+    let color = if active { "#FF7750" } else { "#8b95a6" };
     let body = match icon {
         NavIcon::Download => format!(
             r#"<path d="M12 3v10m0 0 4-4m-4 4-4-4" fill="none" stroke="{color}" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 14v3.5A2.5 2.5 0 0 0 7.5 20h9a2.5 2.5 0 0 0 2.5-2.5V14" fill="none" stroke="{color}" stroke-width="1.75" stroke-linecap="round"/>"#
@@ -236,12 +235,6 @@ pub fn nav_icon(icon: NavIcon, active: bool) -> iced_svg::Handle {
         NavIcon::Settings => format!(
             r#"<circle cx="12" cy="12" r="3.2" fill="none" stroke="{color}" stroke-width="1.75"/><path d="M19.4 13.3a7.6 7.6 0 0 0 0-2.6l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-2.2-1.3L14.4 3h-4l-.4 2.4a7.6 7.6 0 0 0-2.2 1.3l-2.4-1-2 3.4 2 1.6a7.6 7.6 0 0 0 0 2.6l-2 1.6 2 3.4 2.4-1a7.6 7.6 0 0 0 2.2 1.3l.4 2.4h4l.4-2.4a7.6 7.6 0 0 0 2.2-1.3l2.4 1 2-3.4-2-1.6Z" fill="none" stroke="{color}" stroke-width="1.75" stroke-linejoin="round"/>"#
         ),
-        NavIcon::Back => format!(
-            r#"<path d="m15 5-7 7 7 7" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>"#
-        ),
-        NavIcon::Forward => format!(
-            r#"<path d="m9 5 7 7-7 7" fill="none" stroke="{color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>"#
-        ),
     };
     let svg = format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">{body}</svg>"#
@@ -249,17 +242,33 @@ pub fn nav_icon(icon: NavIcon, active: bool) -> iced_svg::Handle {
     iced_svg::Handle::from_memory(svg.into_bytes())
 }
 
-/// The ClipKit brand mark — a soft-cornered chat-bubble with a "C" letterform.
+/// The 3D sculpted translucent coral ClipKit app icon from `assets/brand/icon-128.png`.
+pub fn brand_icon_handle() -> iced::widget::image::Handle {
+    iced::widget::image::Handle::from_memory(
+        include_bytes!("../../../assets/brand/icon-128.png").to_vec(),
+    )
+}
+
+/// The official ClipKit brand wordmark from `assets/brand/wordmark.png`.
+#[allow(dead_code)]
+pub fn brand_wordmark_handle() -> iced::widget::image::Handle {
+    iced::widget::image::Handle::from_memory(
+        include_bytes!("../../../assets/brand/wordmark.png").to_vec(),
+    )
+}
+
+/// The ClipKit brand mark vector fallback.
+#[allow(dead_code)]
 pub fn brand_mark_svg() -> iced_svg::Handle {
     let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
   <defs>
-    <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-      <stop offset="0" stop-color="#E26891"/>
-      <stop offset="1" stop-color="#C8456E"/>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF8C69"/>
+      <stop offset="1" stop-color="#FF7750"/>
     </linearGradient>
   </defs>
-  <path d="M10 6h28a4 4 0 0 1 4 4v22a4 4 0 0 1-4 4H22l-8 7v-7h-4a4 4 0 0 1-4-4V10a4 4 0 0 1 4-4z" fill="url(#g)"/>
-  <path d="M30.5 18.2a6.8 6.8 0 0 0-4.8-2 7 7 0 0 0 0 14 6.8 6.8 0 0 0 4.8-2l-2.2-2.2a3.8 3.8 0 1 1 0-5.6l2.2-2.2z" fill="#ffffff"/>
+  <rect x="4" y="4" width="40" height="40" rx="10" fill="url(#g)"/>
+  <polygon points="19,14 34,24 19,34" fill="#ffffff"/>
 </svg>"##;
     iced_svg::Handle::from_memory(svg.as_bytes().to_vec())
 }
@@ -367,9 +376,9 @@ pub fn danger_banner(_theme: &iced::Theme) -> container::Appearance {
 /// Sidebar surface.
 pub fn sidebar(theme: &iced::Theme) -> container::Appearance {
     let bg = if is_light(theme) {
-        Color::from_rgb8(236, 238, 242)
+        Color::from_rgb8(243, 245, 249)
     } else {
-        Color::from_rgb8(15, 17, 21)
+        Color::from_rgb8(12, 17, 24)
     };
     container::Appearance {
         background: Some(Background::Color(bg)),
@@ -382,9 +391,9 @@ pub fn sidebar(theme: &iced::Theme) -> container::Appearance {
 /// Main background.
 pub fn main_background(theme: &iced::Theme) -> container::Appearance {
     let bg = if is_light(theme) {
-        Color::from_rgb8(255, 255, 255)
+        Color::from_rgb8(248, 250, 252)
     } else {
-        Color::from_rgb8(26, 29, 36)
+        Color::from_rgb8(16, 23, 32)
     };
     container::Appearance {
         background: Some(Background::Color(bg)),
@@ -398,9 +407,9 @@ pub fn main_background(theme: &iced::Theme) -> container::Appearance {
 pub fn code_block(theme: &iced::Theme) -> container::Appearance {
     container::Appearance {
         background: Some(Background::Color(if is_light(theme) {
-            Color::from_rgb8(244, 246, 250)
+            Color::from_rgb8(241, 245, 249)
         } else {
-            Color::from_rgb8(15, 17, 21)
+            Color::from_rgb8(12, 17, 24)
         })),
         border: Border {
             radius: 8.0.into(),
@@ -408,7 +417,7 @@ pub fn code_block(theme: &iced::Theme) -> container::Appearance {
             color: subtle_border(theme),
         },
         text_color: None,
-        shadow: Default::default(),
+        shadow: Shadow::default(),
     }
 }
 
@@ -471,10 +480,7 @@ pub fn chip(kind: ChipKind) -> impl Fn(&iced::Theme) -> container::Appearance {
                 Color::from_rgba(0.255, 0.796, 0.506, 0.14),
                 color::success(),
             ),
-            ChipKind::Danger => (
-                Color::from_rgba(0.937, 0.365, 0.396, 0.14),
-                color::danger(),
-            ),
+            ChipKind::Danger => (Color::from_rgba(0.937, 0.365, 0.396, 0.14), color::danger()),
             ChipKind::Neutral => (
                 if is_light(theme) {
                     Color::from_rgba(0.0, 0.0, 0.0, 0.05)
@@ -583,20 +589,31 @@ pub mod button {
                 ),
                 Kind::Nav(active) => {
                     if active {
-                        rounded_button(
-                            color::accent(),
-                            Color::WHITE,
-                            Color::TRANSPARENT,
-                            Shadow {
-                                color: color::accent_glow(),
-                                offset: Vector::new(0.0, 5.0),
-                                blur_radius: 16.0,
+                        iced_button::Appearance {
+                            background: Some(Background::Color(if is_light(theme) {
+                                Color::from_rgba(1.0, 0.467, 0.314, 0.12)
+                            } else {
+                                Color::from_rgba(1.0, 0.467, 0.314, 0.16)
+                            })),
+                            border: Border {
+                                radius: 8.0.into(),
+                                width: 1.0,
+                                color: Color::from_rgba(1.0, 0.467, 0.314, 0.35),
                             },
-                            8.0,
-                        )
+                            text_color: if is_light(theme) {
+                                Color::from_rgb8(210, 80, 45)
+                            } else {
+                                color::accent()
+                            },
+                            ..iced_button::Appearance::default()
+                        }
                     } else {
                         iced_button::Appearance {
-                            text_color: color::secondary(),
+                            text_color: if is_light(theme) {
+                                Color::from_rgb8(100, 116, 139)
+                            } else {
+                                color::secondary()
+                            },
                             border: Border::with_radius(8),
                             ..iced_button::Appearance::default()
                         }
@@ -764,7 +781,7 @@ impl iced_text_input::StyleSheet for InputStyle {
     }
 
     fn selection_color(&self, _theme: &Self::Style) -> Color {
-        color::accent_soft()
+        color::accent_ring()
     }
 
     fn disabled(&self, theme: &Self::Style) -> iced_text_input::Appearance {

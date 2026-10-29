@@ -39,7 +39,10 @@ impl VideoContainer {
 
     pub fn supports_hdr(&self) -> bool {
         match self {
-            VideoContainer::Mp4 | VideoContainer::Mkv | VideoContainer::WebM | VideoContainer::Best => true,
+            VideoContainer::Mp4
+            | VideoContainer::Mkv
+            | VideoContainer::WebM
+            | VideoContainer::Best => true,
         }
     }
 }
@@ -252,14 +255,36 @@ impl ContainerFormat {
     }
 
     pub fn supports_hdr(&self) -> bool {
-        match self {
+        matches!(
+            self,
             ContainerFormat::Mp4
-            | ContainerFormat::Mkv
-            | ContainerFormat::WebM
-            | ContainerFormat::Mov
-            | ContainerFormat::Ts
-            | ContainerFormat::Vob => true,
-            _ => false,
+                | ContainerFormat::Mkv
+                | ContainerFormat::WebM
+                | ContainerFormat::Mov
+                | ContainerFormat::Ts
+                | ContainerFormat::Vob
+        )
+    }
+
+    pub fn extension(&self) -> &'static str {
+        match self {
+            ContainerFormat::Mp4 => "mp4",
+            ContainerFormat::Mkv => "mkv",
+            ContainerFormat::WebM => "webm",
+            ContainerFormat::Mov => "mov",
+            ContainerFormat::Avi => "avi",
+            ContainerFormat::Flv => "flv",
+            ContainerFormat::Mp3 => "mp3",
+            ContainerFormat::Aac => "aac",
+            ContainerFormat::Flac => "flac",
+            ContainerFormat::Ogg => "ogg",
+            ContainerFormat::Wav => "wav",
+            ContainerFormat::Wma => "wma",
+            ContainerFormat::M4a => "m4a",
+            ContainerFormat::ThreeGp => "3gp",
+            ContainerFormat::Ts => "ts",
+            ContainerFormat::Vob => "vob",
+            ContainerFormat::Gif => "gif",
         }
     }
 }
@@ -368,6 +393,20 @@ impl Resolution {
             Resolution::Res360p,
             Resolution::Res240p,
         ]
+    }
+
+    pub fn scale_filter(&self) -> Option<&'static str> {
+        match self {
+            Resolution::Source => None,
+            Resolution::Res8K => Some("scale=-2:4320"),
+            Resolution::Res4K => Some("scale=-2:2160"),
+            Resolution::Res1440p => Some("scale=-2:1440"),
+            Resolution::Res1080p => Some("scale=-2:1080"),
+            Resolution::Res720p => Some("scale=-2:720"),
+            Resolution::Res480p => Some("scale=-2:480"),
+            Resolution::Res360p => Some("scale=-2:360"),
+            Resolution::Res240p => Some("scale=-2:240"),
+        }
     }
 }
 
@@ -617,5 +656,66 @@ impl TranscodePreset {
                 use_gpu: true,
             },
         ]
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_container_format_extensions_and_hdr() {
+        assert_eq!(ContainerFormat::Mp4.extension(), "mp4");
+        assert_eq!(ContainerFormat::Mkv.extension(), "mkv");
+        assert_eq!(ContainerFormat::WebM.extension(), "webm");
+        assert_eq!(ContainerFormat::Mov.extension(), "mov");
+        assert_eq!(ContainerFormat::Mp3.extension(), "mp3");
+        assert_eq!(ContainerFormat::Flac.extension(), "flac");
+
+        assert!(ContainerFormat::Mp4.supports_hdr());
+        assert!(ContainerFormat::Mkv.supports_hdr());
+        assert!(ContainerFormat::Mov.supports_hdr());
+        assert!(!ContainerFormat::Mp3.supports_hdr());
+        assert!(!ContainerFormat::Avi.supports_hdr());
+        assert!(!ContainerFormat::Gif.supports_hdr());
+    }
+
+    #[test]
+    fn test_resolution_scale_filters() {
+        assert_eq!(Resolution::Source.scale_filter(), None);
+        assert_eq!(Resolution::Res1080p.scale_filter(), Some("scale=-2:1080"));
+        assert_eq!(Resolution::Res720p.scale_filter(), Some("scale=-2:720"));
+        assert_eq!(Resolution::Res4K.scale_filter(), Some("scale=-2:2160"));
+    }
+
+    #[test]
+    fn test_built_in_presets_validity() {
+        let presets = TranscodePreset::builtin_presets();
+        assert!(!presets.is_empty());
+
+        // Check that every preset has non-empty name and matches its container extension
+        for p in &presets {
+            assert!(!p.name.is_empty());
+            assert!(!p.container.extension().is_empty());
+            assert!(!p.video_codec.to_string().is_empty());
+            assert!(!p.audio_codec.to_string().is_empty());
+        }
+
+        // Must include popular presets
+        assert!(presets
+            .iter()
+            .any(|p| p.name.contains("MP4") && p.name.contains("1080p")));
+        assert!(presets.iter().any(|p| p.name.contains("ProRes")));
+        assert!(presets.iter().any(|p| p.name.contains("MP3")));
+        assert!(presets.iter().any(|p| p.name.contains("FLAC")));
+    }
+
+    #[test]
+    fn test_download_preset_defaults() {
+        let preset = DownloadPreset::default();
+        assert_eq!(preset.content_type, ContentType::VideoAudio);
+        assert_eq!(preset.video_quality, VideoQuality::Best);
+        assert_eq!(preset.video_container, VideoContainer::Best);
+        assert_eq!(preset.audio_format, AudioFormat::Best);
     }
 }
