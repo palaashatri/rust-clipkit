@@ -83,6 +83,11 @@ impl TranscoderPane {
         self.manager.set_ffmpeg_path(path);
     }
 
+    #[allow(dead_code)]
+    pub fn set_advanced_open(&mut self, open: bool) {
+        self.advanced_open = open;
+    }
+
     pub fn handle_event(&mut self, event: &AppEvent) -> Command<TranscoderPaneMessage> {
         match event {
             AppEvent::TranscodeProgress { job_id, progress } => {

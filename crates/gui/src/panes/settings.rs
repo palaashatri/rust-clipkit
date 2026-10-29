@@ -83,6 +83,11 @@ impl SettingsPane {
         self.manager_pane.managed_ffmpeg_path()
     }
 
+    #[allow(dead_code)]
+    pub fn set_active_tab(&mut self, tab: SettingsTab) {
+        self.active_tab = tab;
+    }
+
     /// Returns `(Command, Option<updated config>)`.
     pub fn update(
         &mut self,

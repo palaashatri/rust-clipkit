@@ -62,14 +62,14 @@ impl Application for App {
     type Flags = ();
 
     fn new(_flags: ()) -> (Self, Command<Message>) {
-        let config = AppConfig::load().unwrap_or_default();
+        let mut config = AppConfig::load().unwrap_or_default();
 
         let (event_tx, _) = broadcast::channel::<AppEvent>(512);
         let event_tx = Arc::new(event_tx);
 
-        let download_pane = DownloadPane::new(&config, Arc::clone(&event_tx));
-        let transcoder_pane = TranscoderPane::new(&config, Arc::clone(&event_tx));
-        let settings_pane = SettingsPane::new(&config, Arc::clone(&event_tx));
+        let mut download_pane = DownloadPane::new(&config, Arc::clone(&event_tx));
+        let mut transcoder_pane = TranscoderPane::new(&config, Arc::clone(&event_tx));
+        let mut settings_pane = SettingsPane::new(&config, Arc::clone(&event_tx));
 
         let ffmpeg_custom = config.ffmpeg_path.clone();
         let detect_cmd = Command::perform(
@@ -92,8 +92,40 @@ impl Application for App {
         #[cfg(target_os = "macos")]
         let menu = init_macos_menu();
 
+        let initial_pane = match std::env::var("CLIPKIT_PANE").as_deref() {
+            Ok("transcoder") => Pane::Transcoder,
+            Ok("settings") => Pane::Settings,
+            _ => Pane::Download,
+        };
+
+        if std::env::var("CLIPKIT_ADVANCED").is_ok() {
+            download_pane.set_advanced_open(true);
+            transcoder_pane.set_advanced_open(true);
+        }
+
+        if let Ok(tab) = std::env::var("CLIPKIT_SETTINGS_TAB") {
+            match tab.as_str() {
+                "engine" => {
+                    settings_pane.set_active_tab(crate::panes::settings::SettingsTab::Engine)
+                }
+                "about" => settings_pane.set_active_tab(crate::panes::settings::SettingsTab::About),
+                "general" => {
+                    settings_pane.set_active_tab(crate::panes::settings::SettingsTab::General)
+                }
+                _ => {}
+            }
+        }
+
+        if let Ok(theme_env) = std::env::var("CLIPKIT_THEME") {
+            if theme_env == "light" {
+                config.theme = ytdlp_core::ThemeChoice::Light;
+            } else if theme_env == "dark" {
+                config.theme = ytdlp_core::ThemeChoice::Dark;
+            }
+        }
+
         let app = Self {
-            active_pane: Pane::Download,
+            active_pane: initial_pane,
             config,
             event_tx,
             download_pane,

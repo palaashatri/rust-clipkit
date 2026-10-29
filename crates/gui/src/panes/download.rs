@@ -95,6 +95,11 @@ impl DownloadPane {
         self.manager.set_ytdlp_path(path);
     }
 
+    #[allow(dead_code)]
+    pub fn set_advanced_open(&mut self, open: bool) {
+        self.advanced_open = open;
+    }
+
     pub fn handle_event(&mut self, event: &AppEvent) -> Command<DownloadPaneMessage> {
         match event {
             AppEvent::DownloadProgress { job_id, progress } => {
